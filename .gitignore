@@ -1,0 +1,9 @@
+.env
+estado/*
+!estado/.gitkeep
+logs/*
+!logs/.gitkeep
+__pycache__/
+*.pyc
+.pytest_cache/
+config.yaml.bak

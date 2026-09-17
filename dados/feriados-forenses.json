@@ -1,0 +1,45 @@
+{
+  "extraido_em": "2026-09-17T19:30:00-03:00",
+  "fonte": "manual (calendário nacional + feriados municipais de São Paulo/SP) — SUBSTITUIR pela extração do Legalcloud (prompt 03)",
+  "horizonte_ate": "2027-01-20",
+  "feriados_nacionais": [
+    {"data": "2026-01-01", "descricao": "Confraternização Universal"},
+    {"data": "2026-02-16", "descricao": "Carnaval (segunda) — ponto facultativo nacional; forense na maioria dos tribunais"},
+    {"data": "2026-02-17", "descricao": "Carnaval (terça)"},
+    {"data": "2026-02-18", "descricao": "Quarta-feira de Cinzas — expediente reduzido em vários tribunais (CONFERIR)"},
+    {"data": "2026-04-03", "descricao": "Sexta-feira Santa"},
+    {"data": "2026-04-21", "descricao": "Tiradentes"},
+    {"data": "2026-05-01", "descricao": "Dia do Trabalho"},
+    {"data": "2026-06-04", "descricao": "Corpus Christi"},
+    {"data": "2026-09-07", "descricao": "Independência do Brasil"},
+    {"data": "2026-10-12", "descricao": "Nossa Senhora Aparecida"},
+    {"data": "2026-11-02", "descricao": "Finados"},
+    {"data": "2026-11-15", "descricao": "Proclamação da República"},
+    {"data": "2026-11-20", "descricao": "Dia da Consciência Negra (Lei 14.759/2023)"},
+    {"data": "2026-12-08", "descricao": "Dia da Justiça (feriado forense — art. 62, IV, Lei 5.010/66; CONFERIR por tribunal)"},
+    {"data": "2026-12-25", "descricao": "Natal"},
+    {"data": "2027-01-01", "descricao": "Confraternização Universal"}
+  ],
+  "tribunais": {
+    "TJSP": {
+      "feriados": [
+        {"data": "2026-07-09", "descricao": "Revolução Constitucionalista (feriado estadual SP)"},
+        {"data": "2026-11-01", "descricao": "Todos os Santos (Lei 5.010/66, feriado forense) — CONFERIR"}
+      ],
+      "suspensoes": [
+        {"inicio": "2026-12-20", "fim": "2027-01-20", "descricao": "Recesso forense (art. 220 CPC)"}
+      ],
+      "comarcas": {
+        "São Paulo": [
+          {"data": "2026-01-25", "descricao": "Aniversário de São Paulo"}
+        ]
+      }
+    },
+    "TJPR": {"feriados": [], "suspensoes": [{"inicio": "2026-12-20", "fim": "2027-01-20", "descricao": "Recesso forense"}], "comarcas": {}},
+    "TRF3": {"feriados": [], "suspensoes": [{"inicio": "2026-12-20", "fim": "2027-01-20", "descricao": "Recesso forense"}], "comarcas": {}},
+    "STJ": {"feriados": [], "suspensoes": [{"inicio": "2026-12-20", "fim": "2027-01-20", "descricao": "Recesso forense"}], "comarcas": {}},
+    "STF": {"feriados": [], "suspensoes": [{"inicio": "2026-12-20", "fim": "2027-01-20", "descricao": "Recesso forense"}], "comarcas": {}}
+  },
+  "nao_encontradas": [],
+  "alteracoes": []
+}
