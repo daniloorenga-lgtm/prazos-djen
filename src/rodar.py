@@ -34,6 +34,7 @@ from calendario import Calendario, ler_status_atualizacao  # noqa: E402
 from coletar import coletar  # noqa: E402
 from contar import contar_prazo, eh_dia_util, lembrete as calc_lembrete  # noqa: E402
 from dedup import Processados, deduplicar, mesmo_ato  # noqa: E402
+from legalcloud import abrir_conferidor, resolver_conferencia  # noqa: E402
 from modelos import (CATEGORIAS_SEM_CARTAO, Cartao, Classificacao, ErroSchema, Publicacao,  # noqa: E402
                      classificacao_indeterminada, validar_classificacao)
 import relatorio_email  # noqa: E402
@@ -216,7 +217,9 @@ def montar_titulo(cls: Classificacao, pub: dict[str, Any], ato: str) -> tuple[st
     return f"{partes} | {ato}", partes
 
 
-def montar_descricao(pub: dict[str, Any], res, lemb: date, cls: Classificacao, prazo, obs_extra: list[str]) -> str:
+def montar_descricao(pub: dict[str, Any], res, lemb: date, cls: Classificacao, prazo, obs_extra: list[str],
+                     data_final: date | None = None, linha_legalcloud: str | None = None) -> str:
+    data_final = data_final or res.data_final
     fer = ", ".join(d.strftime("%d/%m") for d in res.feriados_no_intervalo) or "nenhum"
     linhas = [
         f"{pub['fonte']} - {pub['tribunal']}",
@@ -228,7 +231,7 @@ def montar_descricao(pub: dict[str, Any], res, lemb: date, cls: Classificacao, p
         "---",
         f"Contagem: {res.linha_contagem()}",
         f"Feriados/suspensões no intervalo: {fer}" + (" · atravessa o recesso 20/12–20/01" if res.atravessou_recesso else ""),
-        f"Cartões desta publicação: Prazo Fatal {res.data_final.strftime('%d/%m')} | Lembrete {lemb.strftime('%d/%m')}",
+        f"Cartões desta publicação: Prazo Fatal {data_final.strftime('%d/%m')} | Lembrete {lemb.strftime('%d/%m')}",
         f"Categoria: {cls.categoria} · Intimado: {', '.join(pub.get('intimados') or ['não identificado'])}",
         f"Ato: {prazo.ato} · {prazo.dias} dias {'corridos' if prazo.dias_corridos else 'úteis'}" + (f" · {prazo.motivo}" if prazo.motivo else ""),
     ]
@@ -236,7 +239,9 @@ def montar_descricao(pub: dict[str, Any], res, lemb: date, cls: Classificacao, p
         linhas.append(f"Dúvida: {cls.duvida}")
     for o in obs_extra:
         linhas.append(f"Obs.: {o}")
-    if "CONFERIR CONTAGEM" in obs_extra or any("CONFERIR" in o for o in obs_extra):
+    if linha_legalcloud:
+        linhas.append(linha_legalcloud)
+    elif "CONFERIR CONTAGEM" in obs_extra or any("CONFERIR" in o for o in obs_extra):
         linhas.append("Legalcloud: pendente de conferência")
     return "\n".join(linhas)
 
@@ -307,6 +312,31 @@ def etapa_contar_e_lancar(args: argparse.Namespace, config: dict[str, Any]) -> i
         if not etiquetas_ids.get(nome) and not sem_trello:
             ex["alertas"].append(f"Etiqueta '{nome}' sem ID no config.yaml — cartões sairão sem ela. Rode --etapa descobrir-ids.")
 
+    lccfg = config.get("legalcloud") or {}
+    estado_lc: dict[str, Any] = {"conferidor": None, "tentado": False, "indisponivel": None}
+    usar_lc = not args.sem_legalcloud and (not ex["flags"]["dry_run"] or lccfg.get("conferir_no_dry_run", True))
+    ex["conferidos_legalcloud"] = 0
+    ex["legalcloud"] = {"usado": False, "indisponivel": None, "divergencias": 0}
+
+    def obter_conferidor():
+        if estado_lc["tentado"]:
+            return estado_lc["conferidor"]
+        estado_lc["tentado"] = True
+        if not usar_lc:
+            estado_lc["indisponivel"] = "desligado por --sem-legalcloud" if args.sem_legalcloud else "desligado em dry-run (legalcloud.conferir_no_dry_run=false)"
+        else:
+            try:
+                c = abrir_conferidor(lccfg, LOGS)
+                c.__enter__()
+                estado_lc["conferidor"] = c
+                ex["legalcloud"]["usado"] = True
+            except Exception as e:  # noqa: BLE001
+                estado_lc["indisponivel"] = str(e)
+        if estado_lc["indisponivel"]:
+            ex["legalcloud"]["indisponivel"] = estado_lc["indisponivel"]
+            ex["alertas"].append(f"Legalcloud indisponível ({estado_lc['indisponivel']}): prazos CONFERIR CONTAGEM ficaram sem conferência no site.")
+        return estado_lc["conferidor"]
+
     prazos_out: list[dict[str, Any]] = []
     criados_nesta_execucao: list[str] = []
     ontem = hoje - timedelta(days=1)
@@ -347,6 +377,26 @@ def etapa_contar_e_lancar(args: argparse.Namespace, config: dict[str, Any]) -> i
                 obs.append("comarca do processo não identificada no calendário — feriados municipais não considerados")
             if d0 < ontem:
                 obs.append(f"D0 anterior a ontem ({br(d0)}): o prazo pode já estar correndo há dias")
+            data_final = res.data_final
+            linha_lc = None
+            conferencia: dict[str, Any] | None = None
+            if conferir:
+                conferidor = obter_conferidor()
+                if conferidor is not None:
+                    data_inf = d0 if lccfg.get("data_informada") == "disponibilizacao" else res.data_publicacao
+                    rc = conferidor.conferir(pub["tribunal"], pub.get("classe") or "", data_inf, prazo.dias, prazo.dias_corridos, res.data_final)
+                    data_final, linha_lc, divergiu = resolver_conferencia(res.data_final, rc)
+                    conferencia = {"data_site": rc.data_site.isoformat() if rc.data_site else None, "confere": rc.confere,
+                                   "observacao": rc.observacao, "captura": rc.captura, "divergiu": divergiu}
+                    if rc.data_site is not None:
+                        ex["conferidos_legalcloud"] += 1
+                    else:
+                        ex["alertas"].append(f"Legalcloud não conferiu {pub.get('numero_processo')} · {prazo.ato}: {rc.observacao}")
+                    if divergiu:
+                        ex["legalcloud"]["divergencias"] += 1
+                        lemb = calc_lembrete(data_final, prazo.dias, feriados, suspensoes, dia_1=res.dia_1)
+                        obs.append(linha_lc)
+                        ex["alertas"].append(f"DIVERGÊNCIA Legalcloud: {pub.get('numero_processo')} · {prazo.ato} — site {br(rc.data_site)} × local {br(res.data_final)}; lançado o mais curto ({br(data_final)}).")
             etiquetas = []
             if conferir:
                 etiquetas.append("CONFERIR CONTAGEM")
@@ -355,19 +405,21 @@ def etapa_contar_e_lancar(args: argparse.Namespace, config: dict[str, Any]) -> i
             elif cls.duvida:
                 etiquetas.append("DÚVIDA DE CLASSIFICAÇÃO")
             titulo, partes = montar_titulo(cls, pub, prazo.ato)
-            desc = montar_descricao(pub, res, lemb, cls, prazo, obs + (["CONFERIR CONTAGEM"] if conferir else []))
+            desc = montar_descricao(pub, res, lemb, cls, prazo, obs + (["CONFERIR CONTAGEM"] if conferir else []),
+                                    data_final=data_final, linha_legalcloud=linha_lc)
             item: dict[str, Any] = {
                 "hash_publicacao": pub["hash"], "numero_processo": pub.get("numero_processo"), "categoria": cls.categoria,
                 "ato": prazo.ato, "dias": prazo.dias, "dias_corridos": prazo.dias_corridos, "conferir": conferir,
                 "motivo": prazo.motivo, "d0": d0.isoformat(), "data_publicacao": res.data_publicacao.isoformat(),
-                "dia_1": res.dia_1.isoformat(), "data_final": res.data_final.isoformat(), "data_lembrete": lemb.isoformat(),
+                "dia_1": res.dia_1.isoformat(), "data_final": data_final.isoformat(), "data_lembrete": lemb.isoformat(),
+                "data_final_local": res.data_final.isoformat(), "legalcloud": conferencia,
                 "feriados_no_intervalo": [d.isoformat() for d in res.feriados_no_intervalo],
                 "atravessou_recesso": res.atravessou_recesso, "observacoes_contagem": obs, "titulo": titulo,
                 "cliente": partes, "intimados": pub.get("intimados", []), "etiquetas": etiquetas,
                 "cartao_fatal": None, "cartao_lembrete": None, "status": "PENDENTE", "detalhe_status": "",
                 "republicacao": bool(pub.get("republicacao")),
             }
-            fatal = Cartao("fatal", titulo, desc, res.data_final.isoformat(), ["Prazo Fatal", *etiquetas], [m["nome"] for m in tcfg["membros"]])
+            fatal = Cartao("fatal", titulo, desc, data_final.isoformat(), ["Prazo Fatal", *etiquetas], [m["nome"] for m in tcfg["membros"]])
             lembr = Cartao("lembrete", titulo, desc, lemb.isoformat(), ["Lembrete", *etiquetas], [m["nome"] for m in tcfg["membros"]])
 
             # §5.1 duplicidade: no quadro (inclusive arquivados) e nesta execução
@@ -382,18 +434,18 @@ def etapa_contar_e_lancar(args: argparse.Namespace, config: dict[str, Any]) -> i
             if existente:
                 item["status"] = "DUPLICADO"
                 due_existente = (existente.get("due") or "")[:10]
-                mudou = bool(due_existente) and due_existente != res.data_final.isoformat() and not (existente.get("due") and _mesma_data_local(existente["due"], res.data_final))
+                mudou = bool(due_existente) and due_existente != data_final.isoformat() and not (existente.get("due") and _mesma_data_local(existente["due"], data_final))
                 item["detalhe_status"] = (f"já existe cartão para o mesmo ato: {existente.get('shortUrl')}"
-                                          + (f" — prazo DIFERENTE (cartão: {due_existente}; calculado: {res.data_final.isoformat()})" if mudou else " — prazo mantido"))
+                                          + (f" — prazo DIFERENTE (cartão: {due_existente}; calculado: {data_final.isoformat()})" if mudou else " — prazo mantido"))
                 if cliente_trello and existente.get("id"):
                     try:
                         if mudou:
-                            cliente_trello.atualizar_vencimento(existente["id"], res.data_final.isoformat(), tcfg["fuso"], tcfg["hora_vencimento"])
-                            cliente_trello.comentar(existente["id"], f"Republicação/nova intimação em {br(d0)} — prazo ATUALIZADO para {br(res.data_final)}. Contagem: {res.linha_contagem()}")
+                            cliente_trello.atualizar_vencimento(existente["id"], data_final.isoformat(), tcfg["fuso"], tcfg["hora_vencimento"])
+                            cliente_trello.comentar(existente["id"], f"Republicação/nova intimação em {br(d0)} — prazo ATUALIZADO para {br(data_final)}. Contagem: {res.linha_contagem()}")
                             item["status"] = "ATUALIZADO"
                             item["cartao_fatal"] = {"url": existente.get("shortUrl"), "id": existente["id"]}
                         else:
-                            cliente_trello.comentar(existente["id"], f"Republicação/nova intimação em {br(d0)} — prazo mantido ({br(res.data_final)}).")
+                            cliente_trello.comentar(existente["id"], f"Republicação/nova intimação em {br(d0)} — prazo mantido ({br(data_final)}).")
                     except Exception as e:  # noqa: BLE001
                         item["detalhe_status"] += f" (falha ao comentar: {e})"
                 ex["alertas"].append(f"Duplicidade: {titulo} — {item['detalhe_status']}")
@@ -424,11 +476,19 @@ def etapa_contar_e_lancar(args: argparse.Namespace, config: dict[str, Any]) -> i
                     item["status"] = "NAO_LANCADO"
                     item["detalhe_status"] = f"{e!r}"
             prazos_out.append(item)
-            print(f"{item['status']}: {titulo} · fatal {br(res.data_final)} · lembrete {br(lemb)} · {', '.join(etiquetas) or '-'}"
+            print(f"{item['status']}: {titulo} · fatal {br(data_final)} · lembrete {br(lemb)} · {', '.join(etiquetas) or '-'}"
+                  + (f" · {linha_lc}" if linha_lc else "")
                   + (f" · {item['detalhe_status']}" if item["detalhe_status"] else ""))
             if item["status"] == "NAO_LANCADO":
                 print(f"NAO_LANCADO: {titulo} — {item['detalhe_status']}")
 
+    if estado_lc["conferidor"] is not None:
+        try:
+            estado_lc["conferidor"].__exit__(None, None, None)
+        except Exception as e:  # noqa: BLE001
+            log.warning("erro ao fechar o Legalcloud: %s", e)
+    print(f"LEGALCLOUD: {ex['conferidos_legalcloud']} prazo(s) conferido(s) · {ex['legalcloud']['divergencias']} divergência(s)"
+          + (f" · indisponível: {ex['legalcloud']['indisponivel']}" if ex['legalcloud']['indisponivel'] else ""))
     ex["prazos"] = prazos_out
     gravar_json(ARQ_LANCADOS, prazos_out)
     gravar_json(ARQ_EXEC, ex)
@@ -625,6 +685,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--ate", help="fim da janela forçada (AAAA-MM-DD), opcional")
     ap.add_argument("--erro-coleta", nargs="?", const="", help="com --etapa email: envia o e-mail de alerta de falha na coleta")
     ap.add_argument("--forcar", action="store_true", help="com --etapa fechar: grava estado mesmo sem e-mail enviado")
+    ap.add_argument("--sem-legalcloud", action="store_true", help="não conferir prazos no site do Legalcloud")
     args = ap.parse_args(argv)
     arq_log = configurar_log()
     config = carregar_config()

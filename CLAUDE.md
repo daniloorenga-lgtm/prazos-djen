@@ -12,7 +12,8 @@ mais curto e o mais longo e sinalize.
 
 1. `python src/rodar.py --etapa coletar` → gera `estado/pendentes.json`.
 2. Classificar cada item de `pendentes.json` (regras abaixo) e gravar `estado/classificadas.json`.
-3. `python src/rodar.py --etapa contar-e-lancar` → conta, verifica duplicidade, cria cartões.
+3. `python src/rodar.py --etapa contar-e-lancar` → conta, confere no Legalcloud os prazos `conferir`/`CONFERIR CONTAGEM`
+   (headless; divergência → prevalece a data mais curta), verifica duplicidade, cria cartões.
 4. `python src/rodar.py --etapa autoverificar` → cinco itens do §8.
 5. `python src/rodar.py --etapa email` → envia. 6. `python src/rodar.py --etapa fechar`.
 

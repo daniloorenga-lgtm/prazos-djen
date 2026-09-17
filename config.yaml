@@ -51,7 +51,25 @@ calendario:
   arquivo: dados/feriados-forenses.json
   status: dados/feriados-forenses.status.json
   idade_maxima_dias: 14
-  legalcloud_url: https://app.legalcloud.com.br/calculadora/
+
+# Conferência de prazos no site (§0 uso_2). Credenciais SÓ em LEGALCLOUD_USER / LEGALCLOUD_PASS (.env).
+# Os campos do site não puderam ser inspecionados na construção: rode `python src/legalcloud.py --explorar`
+# uma vez e ajuste `campos` (lista de candidatos: label=..., css=..., role=button:..., text=...).
+legalcloud:
+  url: https://app.legalcloud.com.br/calculadora/
+  url_login: https://app.legalcloud.com.br/login/
+  url_calculadora: https://app.legalcloud.com.br/calculadora/
+  timeout_segundos: 45
+  headless: true
+  conferir_no_dry_run: true       # a conferência só lê o site; pode rodar em --dry-run
+  data_informada: publicacao      # publicacao | disponibilizacao — o que o site pede como data inicial
+  tribunais_nomes:                # como o site escreve cada tribunal (se diferente da sigla)
+    TJSP: TJSP
+    TJPR: TJPR
+    TRF3: TRF3
+    STJ: STJ
+    STF: STF
+  campos: {}                      # sobrescreve os candidatos padrão de src/legalcloud.py, por nome de campo
 
 # Usados pela rotina semanal (prompt 03) para extrair o calendário do Legalcloud.
 tribunais_monitorados: [TJSP, TJPR, TRF3, STJ, STF, TJRJ, TJMG, TRT2, TRT15]

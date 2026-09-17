@@ -1,0 +1,17 @@
+<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>Legalcloud (falso) — Login</title></head>
+<body>
+<h1>Acesse sua conta</h1>
+<form id="f">
+  <p><label for="email">E-mail</label> <input id="email" name="email" type="email"></p>
+  <p><label for="pw">Senha</label> <input id="pw" name="password" type="password"></p>
+  <button type="submit">Entrar</button>
+  <p id="erro" style="color:red"></p>
+</form>
+<script>
+document.getElementById('f').addEventListener('submit', function (ev) {
+  ev.preventDefault();
+  if (document.getElementById('email').value === 'usuario@teste' && document.getElementById('pw').value === 'segredo') {
+    location.href = 'calculadora.html';
+  } else { document.getElementById('erro').textContent = 'Credenciais inválidas'; }
+});
+</script></body></html>

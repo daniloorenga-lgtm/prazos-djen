@@ -1,0 +1,36 @@
+<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>Calculadora de prazos (falsa)</title></head>
+<body>
+<h1>Calculadora de prazos</h1>
+<form id="calc">
+  <p><label for="trib">Tribunal</label>
+    <select id="trib" name="tribunal"><option value="">Selecione</option><option value="tjsp">TJSP - Tribunal de Justiça de São Paulo</option><option value="tjpr">TJPR - Tribunal de Justiça do Paraná</option></select></p>
+  <p><label for="tipo">Tipo de processo</label>
+    <select id="tipo" name="tipo"><option>Cível</option><option>Juizado Especial</option></select></p>
+  <p><label for="dp">Data da publicação</label> <input id="dp" name="data_publicacao" placeholder="dd/mm/aaaa"></p>
+  <p><label for="dias">Prazo (dias)</label> <input id="dias" name="dias" type="number"></p>
+  <p><label><input type="radio" name="cont" value="uteis" checked> Dias úteis</label>
+     <label><input type="radio" name="cont" value="corridos"> Dias corridos</label></p>
+  <button type="submit">Calcular</button>
+</form>
+<div id="resultado"></div>
+<script>
+// Feriados do site falso: 12/10/2026 só para o TJSP (para simular divergência com uma contagem local sem esse feriado).
+const FERIADOS = {tjsp: ['2026-10-12', '2026-11-02'], tjpr: ['2026-11-02']};
+function iso(d) { return d.toISOString().slice(0, 10); }
+function util(d, trib) { const w = d.getUTCDay(); return w !== 0 && w !== 6 && !(FERIADOS[trib] || []).includes(iso(d)); }
+document.getElementById('calc').addEventListener('submit', function (ev) {
+  ev.preventDefault();
+  const trib = document.getElementById('trib').value;
+  const [dd, mm, aa] = document.getElementById('dp').value.split('/').map(Number);
+  const dias = Number(document.getElementById('dias').value);
+  const corridos = document.querySelector('input[name=cont]:checked').value === 'corridos';
+  let d = new Date(Date.UTC(aa, mm - 1, dd));
+  // dia 1 = primeiro dia útil após a publicação
+  do { d.setUTCDate(d.getUTCDate() + 1); } while (!util(d, trib));
+  let n = 1;
+  while (n < dias) { d.setUTCDate(d.getUTCDate() + 1); if (corridos || util(d, trib)) n++; }
+  while (!util(d, trib)) d.setUTCDate(d.getUTCDate() + 1);
+  const fmt = `${String(d.getUTCDate()).padStart(2, '0')}/${String(d.getUTCMonth() + 1).padStart(2, '0')}/${d.getUTCFullYear()}`;
+  document.getElementById('resultado').innerHTML = `<p>Publicado em ${document.getElementById('dp').value}.</p><p><b>Prazo final:</b> ${fmt}</p>`;
+});
+</script></body></html>

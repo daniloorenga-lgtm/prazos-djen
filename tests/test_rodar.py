@@ -18,6 +18,10 @@ def ambiente(tmp_path, monkeypatch):
     for nome in ("EXEC", "PENDENTES", "CLASSIFICADAS", "LANCADOS", "ULTIMA", "PROCESSADOS"):
         monkeypatch.setattr(rodar, f"ARQ_{nome}", estado / getattr(rodar, f"ARQ_{nome}").name)
     monkeypatch.setenv("PRAZOS_DJEN_MOCK", str(MOCK))
+    mock_lc = tmp_path / "legalcloud-mock.json"
+    # JEC: publicação 11/09, 5 corridos → local 18/09; o "site" responde 17/09 → diverge, prevalece 17/09
+    mock_lc.write_text(json.dumps({"TJSP|2026-09-11|5|corridos": "2026-09-17", "*": "igual"}), encoding="utf-8")
+    monkeypatch.setenv("PRAZOS_LEGALCLOUD_MOCK", str(mock_lc))
     monkeypatch.delenv("TRELLO_KEY", raising=False)
     return estado, logs
 
@@ -61,6 +65,11 @@ def test_ciclo_dry_run(ambiente):
     assert sorted(p["dias"] for p in indet) == [5, 5, 15, 15]
     assert all("DÚVIDA DE CLASSIFICAÇÃO" in p["etiquetas"] and "CONFERIR CONTAGEM" in p["etiquetas"] for p in indet)
     assert any("D0 ANTIGA" in a for a in ex["alertas"])
+    # Legalcloud simulado: só os prazos CONFERIR passam pelo site; INDETERMINADA (4) sempre confere
+    assert ex["conferidos_legalcloud"] == 4 and ex["legalcloud"]["usado"] is True
+    assert all(p["legalcloud"]["confere"] is True for p in indet)
+    assert "Legalcloud:" in indet[0]["cartao_fatal"]["descricao"] and "confere" in indet[0]["cartao_fatal"]["descricao"]
+    assert ed["legalcloud"] is None and "pendente de conferência" not in desc
     assert sum("INDETERMINADA" in a for a in ex["alertas"]) >= 2
 
     rc = rodar.main(["--etapa", "autoverificar"])
@@ -76,6 +85,30 @@ def test_ciclo_dry_run(ambiente):
     # nova coleta da mesma janela: nada a classificar
     assert rodar.main(["--etapa", "coletar", "--dry-run", "--data", "2026-09-10", "--ate", "2026-09-17"]) == 0
     assert json.loads((estado / "pendentes.json").read_text(encoding="utf-8"))["publicacoes"] == []
+
+
+def test_divergencia_legalcloud_prevalece_a_mais_curta(ambiente):
+    estado, logs = ambiente
+    assert rodar.main(["--etapa", "coletar", "--dry-run", "--data", "2026-09-10", "--ate", "2026-09-17"]) == 0
+    pend = json.loads((estado / "pendentes.json").read_text(encoding="utf-8"))["publicacoes"]
+    h = next(p["hash"] for p in pend if p["numero_processo"] == "1001234-56.2026.8.26.0016")
+    cls = [{"hash": h, "categoria": "INTIMACAO_MANIFESTACAO", "partes": {"autor": "Maria", "reu": "Lojas X"},
+            "prazos": [{"ato": "Manifestação", "dias": 5, "dias_corridos": True, "conferir": True, "motivo": "JEC"}]}]
+    (estado / "classificadas.json").write_text(json.dumps(cls), encoding="utf-8")
+    assert rodar.main(["--etapa", "contar-e-lancar", "--dry-run"]) == 0
+    ex = json.loads((estado / "execucao.json").read_text(encoding="utf-8"))
+    jec = next(p for p in ex["prazos"] if p["ato"] == "Manifestação")
+    assert jec["data_final_local"] == "2026-09-18" and jec["data_final"] == "2026-09-17"      # prevalece a mais curta
+    assert jec["legalcloud"]["divergiu"] and jec["cartao_fatal"]["vencimento"] == "2026-09-17"
+    assert "DIVERGE (site: 17/09/2026; contagem local: 18/09/2026)" in jec["cartao_fatal"]["descricao"]
+    assert "Cartões desta publicação: Prazo Fatal 17/09" in jec["cartao_fatal"]["descricao"]
+    assert any(a.startswith("DIVERGÊNCIA Legalcloud") for a in ex["alertas"]) and ex["legalcloud"]["divergencias"] == 1
+    # com --sem-legalcloud nada é conferido e o e-mail avisa
+    assert rodar.main(["--etapa", "contar-e-lancar", "--dry-run", "--sem-legalcloud"]) == 0
+    ex = json.loads((estado / "execucao.json").read_text(encoding="utf-8"))
+    assert ex["conferidos_legalcloud"] == 0 and "sem-legalcloud" in ex["legalcloud"]["indisponivel"]
+    assert rodar.main(["--etapa", "email", "--dry-run"]) == 0
+    assert "Legalcloud indisponível" in (logs / "email-2026-09-17.txt").read_text(encoding="utf-8")
 
 
 def test_email_sem_publicacoes_e_erro_coleta(ambiente):

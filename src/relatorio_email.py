@@ -112,12 +112,12 @@ def montar_email(ex: dict[str, Any]) -> tuple[str, str, str]:
     sec("Prazos lançados no Trello" + (" (simulação)" if dry else ""))
     ordenados = sorted(lancados + dry, key=lambda p: p["data_final"])
     if ordenados:
-        cab = ["Prazo fatal", "Lembrete", "Processo", "Cliente", "Ato", "Advogado intimado", "Cartão", "Etiquetas"]
+        cab = ["Prazo fatal", "Lembrete", "Processo", "Cliente", "Ato", "Advogado intimado", "Cartão", "Etiquetas", "Legalcloud"]
         linhas = []
         for p in ordenados:
             url = (p.get("cartao_fatal") or {}).get("url") or ("(não criado — simulação)" if p["status"] == "DRY_RUN" else "")
             linhas.append([br(p["data_final"]), br(p["data_lembrete"]), p["numero_processo"] or "não informado pela fonte",
-                           p["cliente"], p["ato"], ", ".join(p["intimados"]), url, ", ".join(p["etiquetas"])])
+                           p["cliente"], p["ato"], ", ".join(p["intimados"]), url, ", ".join(p["etiquetas"]), _legalcloud_col(p)])
         T.append(" | ".join(cab))
         for l in linhas:
             T.append(" | ".join(l))
@@ -187,7 +187,9 @@ def montar_email(ex: dict[str, Any]) -> tuple[str, str, str]:
         f"Execução: {ex.get('iniciada_em', '')} → {datetime.now().strftime('%d/%m/%Y %H:%M')}",
         f"Calendário forense (Legalcloud): última extração {cal.get('extraido_em') or 'nunca'}"
         + (f" ({cal['idade_dias']} dias)" if cal.get("idade_dias") is not None else ""),
-        f"Prazos conferidos no Legalcloud nesta execução: {ex.get('conferidos_legalcloud', 0)}",
+        f"Prazos conferidos no Legalcloud nesta execução: {ex.get('conferidos_legalcloud', 0)}"
+        + (f" · {ex['legalcloud']['divergencias']} divergência(s)" if ex.get("legalcloud", {}).get("divergencias") else "")
+        + (f" · site indisponível: {ex['legalcloud']['indisponivel']}" if ex.get("legalcloud", {}).get("indisponivel") else ""),
         f"Publicações já tratadas em execução anterior (não repetidas): {sum(1 for p in pubs if p.get('ja_processada'))}",
     ]
     lista(rod)
@@ -196,6 +198,17 @@ def montar_email(ex: dict[str, Any]) -> tuple[str, str, str]:
     html = ("<html><body style='font-family:Arial,sans-serif;font-size:14px'>"
             + "".join(H) + "</body></html>")
     return assunto, html, texto
+
+
+def _legalcloud_col(p: dict[str, Any]) -> str:
+    lc = p.get("legalcloud")
+    if not lc:
+        return "não conferido" if p.get("conferir") else "—"
+    if lc.get("data_site") is None:
+        return f"sem resultado ({lc.get('observacao', '')})"
+    if lc.get("divergiu"):
+        return f"DIVERGE: site {br(lc['data_site'], False)} × local {br(p.get('data_final_local'), False)}"
+    return f"confere ({br(lc['data_site'], False)})"
 
 
 def anexo_recortes(ex: dict[str, Any]) -> str:
