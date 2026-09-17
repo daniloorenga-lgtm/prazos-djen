@@ -1,5 +1,10 @@
 # Rodar a rotina numa sessão do Claude Code na web (opção 1)
 
+> **Limitação constatada em 17/09/2026:** com a rede liberada, Trello e Legalcloud funcionam a partir da sessão web, mas a API
+> do DJEN responde `403 — The Amazon CloudFront distribution is configured to block access from your country`. O ambiente web
+> sai por IP fora do Brasil. Enquanto isso valer, a **coleta** precisa rodar de um computador no Brasil; a conferência no
+> Legalcloud e o Trello podem continuar na web.
+
 O ambiente web só alcança os domínios liberados na política de rede. Para a rotina funcionar a partir dele:
 
 ## 1. Política de rede do ambiente

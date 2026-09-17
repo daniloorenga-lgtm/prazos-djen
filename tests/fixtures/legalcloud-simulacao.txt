@@ -1,0 +1,64 @@
+Simular novo prazo
+Verifique a simulação
+Simulação do dia do começo
+17/09/2026 -
+Data de Disponibilização
+18/09/2026 -
+1° dia
+-
+Sexta-feira
+-
+Dia do começo
+Simulação do prazo processual
+18/09/2026 -
+Dia do começo
+19/09/2026 -
+Final de Semana
+20/09/2026 -
+Final de Semana
+1
+21/09/2026 - Segunda-feira
+2
+22/09/2026 - Terça-feira
+3
+23/09/2026 - Quarta-feira
+4
+24/09/2026 - Quinta-feira
+5
+25/09/2026 - Sexta-feira
+26/09/2026 -
+Final de Semana
+27/09/2026 -
+Final de Semana
+6
+28/09/2026 - Segunda-feira
+7
+29/09/2026 - Terça-feira
+8
+30/09/2026 - Quarta-feira
+9
+01/10/2026 - Quinta-feira
+10
+02/10/2026 - Sexta-feira
+03/10/2026 -
+Final de Semana
+04/10/2026 -
+Final de Semana
+11
+05/10/2026 - Segunda-feira
+12
+06/10/2026 - Terça-feira
+13
+07/10/2026 - Quarta-feira
+14
+08/10/2026 - Quinta-feira
+15
+09/10/2026 - Sexta-feira
+Legenda
+ 
+Dia considerado na simulação.
+ 
+Dia desconsiderado na simulação.
+(Seja por motivos de suspensão, prorrogação, dia inicial, dia não útil ou outro evento)
+Imprimir
+Enviar resultado por email

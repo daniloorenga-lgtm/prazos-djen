@@ -53,23 +53,21 @@ calendario:
   idade_maxima_dias: 14
 
 # Conferência de prazos no site (§0 uso_2). Credenciais SÓ em LEGALCLOUD_USER / LEGALCLOUD_PASS (.env).
-# Os campos do site não puderam ser inspecionados na construção: rode `python src/legalcloud.py --explorar`
-# uma vez e ajuste `campos` (lista de candidatos: label=..., css=..., role=button:..., text=...).
+# Formulário inspecionado em 17/09/2026 (login real). Se o site mudar: `python src/legalcloud.py --explorar`.
 legalcloud:
   url: https://app.legalcloud.com.br/calculadora/
-  url_login: https://app.legalcloud.com.br/login/
-  url_calculadora: https://app.legalcloud.com.br/calculadora/
+  url_login: https://app.legalcloud.com.br/conta/login/
+  url_calculadora: https://app.legalcloud.com.br/calculadora/prazo-djen-dje/   # calculadora "Prazos DJEN/DJE"
   timeout_segundos: 45
   headless: true
   conferir_no_dry_run: true       # a conferência só lê o site; pode rodar em --dry-run
-  data_informada: disponibilizacao   # o DJEN trabalha sempre por data de disponibilização (D0); é ela que se informa ao site
-  tribunais_nomes:                # como o site escreve cada tribunal (se diferente da sigla)
-    TJSP: TJSP
-    TJPR: TJPR
-    TRF3: TRF3
-    STJ: STJ
-    STF: STF
-  campos: {}                      # sobrescreve os candidatos padrão de src/legalcloud.py, por nome de campo
+  data_informada: disponibilizacao   # a calculadora DJEN/DJE pede a data de disponibilização (D0)
+  tipo_processo_padrao: Eletrônico
+  sistema_padrao: eSAJ            # TJSP exige escolher o sistema; eSAJ para os processos do escritório
+  sistema_por_tribunal: {TJSP: eSAJ}
+  suspensoes_municipais: Não incluir   # "Incluir" alonga o prazo; a regra do escritório é a data mais curta
+  campos: {}                      # login: sobrescreve os candidatos padrão (label=..., css=...)
+  campos_djen: {}                 # formulário DJEN/DJE: sobrescreve os seletores CSS de CAMPOS_DJEN
 
 # Usados pela rotina semanal (prompt 03) para extrair o calendário do Legalcloud.
 tribunais_monitorados: [TJSP, TJPR, TRF3, STJ, STF, TJRJ, TJMG, TRT2, TRT15]

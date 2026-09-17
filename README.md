@@ -21,21 +21,17 @@ python -m pytest -q           # tudo deve passar antes de qualquer execução re
    (cópia anterior em `config.yaml.bak`; os comentários do YAML se perdem) e lista os membros encontrados.
    **Confira os quatro membros.** Em 17/09/2026 o quadro tinha Pedro, Danilo, Carolina e *Marcela Felix Lira* —
    não há "Marcelo Antonio Muriel" no quadro; ou ele é convidado, ou o quarto membro em `config.yaml` deve ser Marcela.
-3. **Legalcloud (conferência de prazos, §0 uso_2):** a rotina diária abre a calculadora
-   (https://app.legalcloud.com.br/calculadora/) em Chromium headless, faz login com `LEGALCLOUD_USER`/`LEGALCLOUD_PASS`
-   e confere **todo prazo marcado `CONFERIR CONTAGEM`** (tribunal, tipo de processo, **data de disponibilização** — regra do
-   DJEN: tudo se conta de D0 —, dias, úteis/corridos).
-   O resultado vai para a descrição do cartão ("Legalcloud: DD/MM — confere / DIVERGE …"); se divergir, **prevalece a data
-   mais curta** como fatal, a outra fica na descrição e o e-mail destaca. Como o layout do site não pôde ser inspecionado
-   na construção, **calibre uma vez**:
-   ```bash
-   python src/legalcloud.py --explorar                 # login + inventário dos campos em logs/legalcloud/
-   python src/legalcloud.py --testar TJSP 2026-09-17 15   # data = disponibilização; deve responder 09/10/2026
-   ```
-   Se algum campo não for encontrado, ajuste `legalcloud.campos` no `config.yaml` (lista de candidatos por campo:
-   `label=…`, `css=…`, `role=button:…`, `text=…`) com base no inventário. `legalcloud.data_informada` fica em `disponibilizacao` (padrão, regra do DJEN);
-   só mude para `publicacao` se a calculadora do site exigir explicitamente a data de publicação. O driver foi testado contra uma calculadora falsa
-   (`tests/fixtures/calculadora-falsa/`), não contra o site real.
+3. **Legalcloud (conferência de prazos, §0 uso_2):** a rotina abre a calculadora **"Prazos DJEN/DJE"**
+   (https://app.legalcloud.com.br/calculadora/prazo-djen-dje/) em Chromium headless, faz login com `LEGALCLOUD_USER`/`LEGALCLOUD_PASS`
+   e confere **todo prazo marcado `CONFERIR CONTAGEM`**, informando meio (DJEN/DJE), **data de disponibilização**, dias, regime
+   (Novo CPC; Juizado Especial ou CPP quando dias corridos), tribunal, processo eletrônico, sistema (eSAJ para o TJSP), instância
+   e "não incluir suspensões municipais". A simulação dia a dia do site é lida e o dia numerado igual ao prazo é a data do site.
+   Resultado na descrição do cartão ("Legalcloud: DD/MM — confere / DIVERGE …"); em divergência **prevalece a data mais curta**.
+   Validado com login real em 17/09/2026: TJSP, TRF3, STJ, dias úteis e corridos, feriado de 12/10 (o site o desconsidera e a
+   observação registra o motivo). Limite do site: não simula evento com mais de 60 dias no futuro (irrelevante na rotina diária).
+   Teste manual: `python src/legalcloud.py --testar TJSP 2026-09-17 15` (esperado 09/10/2026). Se o site mudar de layout,
+   `python src/legalcloud.py --explorar` grava o inventário de campos em `logs/legalcloud/` e `legalcloud.campos_djen` no
+   `config.yaml` permite sobrescrever os seletores.
 4. **Calendário:** `dados/feriados-forenses.json` vem com o calendário nacional de 2026 preenchido à mão.
    Substitua pela extração do Legalcloud (rotina semanal, `docs/03-prompt-legalcloud-semanal.md`).
    Enquanto a extração tiver mais de 14 dias (ou nunca tiver ocorrido), todos os prazos saem com `CONFERIR CONTAGEM`.
@@ -111,9 +107,11 @@ Edições manuais são aceitas (mesmo formato).
 
 - O Swagger oficial do DJEN não pôde ser lido no ambiente de construção (rede bloqueada). Parâmetros e campos
   vieram de implementações públicas (ver cabeçalho de `src/coletar.py`). Confira `logs/djen-*.json` na primeira coleta real.
-- A conferência no Legalcloud depende de os seletores de `legalcloud.campos` baterem com o site real (ver "Preparar", item 3).
-  Se o site estiver fora, o login falhar ou um campo não for achado, o prazo sai com "Legalcloud: … — não conferido (motivo)",
-  o e-mail leva o alerta e a etiqueta `CONFERIR CONTAGEM` permanece. Capturas de tela ficam em `logs/legalcloud/`.
+- Se o Legalcloud estiver fora, o login falhar ou o site recusar a simulação, o prazo sai com "Legalcloud: … — não conferido
+  (motivo)", o e-mail leva o alerta e a etiqueta `CONFERIR CONTAGEM` permanece. Capturas de tela ficam em `logs/legalcloud/`.
+- **A API do DJEN (CloudFront) bloqueia acessos de fora do Brasil.** Um ambiente do Claude Code na web sai por IP estrangeiro e
+  recebe 403 mesmo com o domínio liberado na política de rede (constatado em 17/09/2026). A coleta precisa rodar de um computador
+  no Brasil (Claude Code Desktop / tarefa local) ou de um ambiente com saída brasileira.
 - Em servidor sem interface gráfica, o Chromium headless precisa das bibliotecas de sistema (`playwright install-deps chromium`).
 - O módulo de e-mail chama-se `src/relatorio_email.py` (não `email.py`) para não sombrear o pacote `email` da biblioteca padrão.
 - `dias_corridos` (Juizados/penal) não aplica o recesso — sempre sai com `CONFERIR CONTAGEM`.

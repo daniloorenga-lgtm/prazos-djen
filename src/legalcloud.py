@@ -1,8 +1,13 @@
 """Conferência de prazos na calculadora do Legalcloud (§0 uso_2 e §4.2 da especificação).
 
 Navegador headless (Playwright + Chromium). Credenciais SÓ de LEGALCLOUD_USER / LEGALCLOUD_PASS.
-Os campos do site são localizados por uma lista de candidatos configurável em config.yaml
-(`legalcloud.campos`), porque o layout do site não pôde ser inspecionado no ambiente de construção.
+Usa a calculadora "Prazos DJEN/DJE" (https://app.legalcloud.com.br/calculadora/prazo-djen-dje/), que
+recebe a DATA DE DISPONIBILIZAÇÃO e simula dia a dia. Campos observados em 17/09/2026 (CAMPOS_DJEN):
+meio_comunicacao (DJE/DJEN), data_disponibilizacao, dias, codigo (Novo CPC/CPP/Antiga CLT/Juizado
+Especial/CLT 2017), tribunal (siglas; TRF-1..6), tipo_processo (Físico/Eletrônico), select sem nome
+"sistema" (eSAJ/Eproc, aparece para alguns tribunais), instancia, incluir (suspensões municipais),
+botão #primeiro_calculo. O resultado é lido do texto "Simulação do prazo processual" (dias numerados).
+O login (labels E-mail/Senha/Entrar) usa a lista de candidatos `campos`.
 
 Calibração (primeiro uso):  python src/legalcloud.py --explorar
   → faz login, abre a calculadora e grava em logs/legalcloud/ a captura de tela, o HTML e um
@@ -42,6 +47,89 @@ CAMPOS_PADRAO: dict[str, list[str]] = {
     "calcular": ["role=button:Calcular", "role=button:Contar", "css=button[type=submit]"],
     "resultado": ["css=#resultado", "css=.resultado", "css=[class*=resultado i]", "css=[id*=resultado i]", "text=/prazo final|data final|vencimento|t[ée]rmino/i"],
 }
+
+
+CAMPOS_DJEN: dict[str, str] = {
+    "meio": "select[name=meio_comunicacao]",
+    "data": "input[name=data_disponibilizacao]",
+    "dias": "input[name=dias]",
+    "codigo": "select[name=codigo]",
+    "tribunal": "select[name=tribunal]",
+    "tipo_processo": "select[name=tipo_processo]",
+    "sistema": "select:not([name])",
+    "instancia": "select[name=instancia]",
+    "incluir": "select[name=incluir]",
+    "simular": "#primeiro_calculo",
+}
+
+RE_LINHA_DATA = re.compile(r"^(\d{2}/\d{2}/\d{4})\s*-\s*(.*)$")
+
+
+def interpretar_simulacao(texto: str, dias: int) -> dict[str, Any]:
+    """Lê o texto da simulação do Legalcloud: dias numerados (contados) e dias desconsiderados.
+    Devolve data_final (dia numerado == dias, senão o último numerado), dia_1, dia_do_comeco,
+    desconsiderados [(data, motivo)] sem fins de semana, e n_contados."""
+    linhas = [l.strip() for l in texto.splitlines()]
+    ini = next((i for i, l in enumerate(linhas) if l.lower().startswith("simulação do prazo processual")), None)
+    if ini is None:
+        return {"ok": False, "motivo": "texto sem 'Simulação do prazo processual'"}
+    contados: list[tuple[int, date]] = []
+    desconsiderados: list[tuple[date, str]] = []
+    comeco: date | None = None
+    n_pendente: int | None = None
+    i = ini + 1
+    while i < len(linhas):
+        l = linhas[i]
+        if l.lower().startswith("legenda"):
+            break
+        if re.fullmatch(r"\d+", l):
+            n_pendente = int(l)
+            i += 1
+            continue
+        m = RE_LINHA_DATA.match(l)
+        if m:
+            d = date(int(m.group(1)[6:]), int(m.group(1)[3:5]), int(m.group(1)[:2]))
+            motivo = m.group(2).strip()
+            if not motivo and i + 1 < len(linhas) and not RE_LINHA_DATA.match(linhas[i + 1]) and not re.fullmatch(r"\d+", linhas[i + 1]):
+                motivo = linhas[i + 1].strip()
+                i += 1
+            if n_pendente is not None:
+                contados.append((n_pendente, d))
+                n_pendente = None
+            else:
+                if "dia do começo" in motivo.lower() or "dia do comeco" in motivo.lower():
+                    comeco = d
+                elif "final de semana" not in motivo.lower():
+                    desconsiderados.append((d, motivo))
+        i += 1
+    if not contados:
+        return {"ok": False, "motivo": "simulação sem dias contados"}
+    final = next((d for n, d in contados if n == dias), None) or contados[-1][1]
+    return {"ok": True, "data_final": final, "dia_1": contados[0][1], "dia_do_comeco": comeco,
+            "n_contados": contados[-1][0], "desconsiderados": desconsiderados}
+
+
+def mensagem_de_aviso(texto: str) -> str:
+    """Texto do modal de aviso do site (entre o botão 'Simular' e 'OK'), quando não há simulação.
+    Ex.: 'Quantidade de dias inválida! Para simular prazos com data de evento 60 dias no futuro …'"""
+    linhas = [l.strip() for l in texto.splitlines() if l.strip()]
+    try:
+        i = max(k for k, l in enumerate(linhas) if l == "Simular")
+    except ValueError:
+        return ""
+    corpo = []
+    for l in linhas[i + 1:i + 8]:
+        if l == "OK":
+            break
+        if l != "!":
+            corpo.append(l)
+    return " ".join(corpo)[:300]
+
+
+def sigla_para_site(tribunal: str) -> str:
+    t = (tribunal or "").upper().strip()
+    m = re.fullmatch(r"TRF-?(\d)", t)
+    return f"TRF-{m.group(1)}" if m else t
 
 
 @dataclass
@@ -115,7 +203,7 @@ class ConferidorMock:
         return False
 
     def conferir(self, tribunal: str, tipo_processo: str, data_publicacao: date, dias: int,
-                 dias_corridos: bool, data_local: date | None = None) -> ResultadoConferencia:
+                 dias_corridos: bool, data_local: date | None = None, **_: Any) -> ResultadoConferencia:
         self.chamadas += 1
         chave = f"{tribunal}|{data_publicacao.isoformat()}|{dias}|{'corridos' if dias_corridos else 'uteis'}"
         v = self.mapa.get(chave, self.mapa.get("*"))
@@ -246,40 +334,77 @@ class ConferidorLegalcloud:
         log.info("login no Legalcloud ok")
 
     def abrir_calculadora(self) -> None:
+        """Sempre recarrega: após uma simulação o site esconde o formulário ("Simular novo prazo")."""
         url = self.cfg.get("url_calculadora") or self.cfg["url"]
-        if not self.page.url.rstrip("/").endswith(url.rstrip("/").split("/")[-1]):
-            self.page.goto(url, wait_until="domcontentloaded")
+        self.page.goto(url, wait_until="domcontentloaded")
         self.page.wait_for_load_state("networkidle")
 
+    def _sel(self, chave: str):
+        css = (self.cfg.get("campos_djen") or {}).get(chave) or CAMPOS_DJEN[chave]
+        return self.page.locator(css).first
+
+    def _sel_opcional(self, chave: str):
+        """Campo que o site só mostra para alguns tribunais (sistema, instância, suspensões municipais)."""
+        loc = self._sel(chave)
+        try:
+            if loc.count() and loc.is_visible(timeout=1500):
+                return loc
+        except Exception:  # noqa: BLE001
+            pass
+        return None
+
     def conferir(self, tribunal: str, tipo_processo: str, data_publicacao: date, dias: int,
-                 dias_corridos: bool, data_local: date | None = None) -> ResultadoConferencia:
-        """`data_publicacao` é a data inicial informada ao site — por padrão a de DISPONIBILIZAÇÃO (D0),
-        regra do DJEN (config `legalcloud.data_informada`)."""
+                 dias_corridos: bool, data_local: date | None = None, regime: str | None = None,
+                 instancia: str | None = None, fonte: str = "DJEN", **_: Any) -> ResultadoConferencia:
+        """`data_publicacao` é a DATA DE DISPONIBILIZAÇÃO (nome mantido por compatibilidade).
+        regime: 'Novo CPC' | 'CPP' | 'Juizado Especial' | 'CLT 2017' (default por dias_corridos)."""
         self.chamadas += 1
+        page = self.page
         try:
             self.abrir_calculadora()
-            nomes = self.cfg.get("tribunais_nomes") or {}
-            self._preencher("tribunal", nomes.get(tribunal, tribunal))
-            if self._localizar("tipo_processo", obrigatorio=False) is not None and tipo_processo:
-                try:
-                    self._preencher("tipo_processo", tipo_processo)
-                except RuntimeError as e:
-                    log.info("tipo de processo não aplicado: %s", e)
-            self._preencher("data_publicacao", data_publicacao.strftime("%d/%m/%Y"))
-            self._preencher("dias", str(dias))
-            alvo = self._localizar("contagem_corridos" if dias_corridos else "contagem_uteis", obrigatorio=False)
-            if alvo is not None:
-                alvo.check() if alvo.evaluate("e => e.type === 'radio' || e.type === 'checkbox'") else alvo.click()
-            self._localizar("calcular").click()
-            self.page.wait_for_load_state("networkidle")
-            loc = self._localizar("resultado", obrigatorio=False)
-            texto = loc.inner_text() if loc is not None else self.page.inner_text("body")
-            data_site = extrair_data_resultado(texto, apos=data_publicacao)
-            cap = self._capturar(f"conferencia-{tribunal}-{data_publicacao.isoformat()}-{dias}")
-            if data_site is None:
-                return ResultadoConferencia(None, None, "resultado sem data reconhecível", cap, texto[:500])
+            regime = regime or ("Juizado Especial" if dias_corridos else "Novo CPC")
+            self._sel("meio").select_option(label="DJE" if fonte.upper().startswith("DJE-") or fonte.upper() == "DJE" else "DJEN")
+            d = self._sel("data")
+            d.click(); d.fill(""); d.type(data_publicacao.strftime("%d/%m/%Y"), delay=25); d.press("Tab")
+            self._sel("dias").fill(str(dias))
+            self._sel("codigo").select_option(label=regime)
+            self._sel("tribunal").select_option(label=sigla_para_site(tribunal))
+            self._sel("tipo_processo").select_option(label=self.cfg.get("tipo_processo_padrao", "Eletrônico"))
+            page.wait_for_timeout(400)
+            sistema = self._sel_opcional("sistema")
+            if sistema is not None:
+                opcoes = sistema.evaluate("e => Array.from(e.options).map(o => o.textContent.trim())")
+                pref = (self.cfg.get("sistema_por_tribunal") or {}).get(sigla_para_site(tribunal)) or self.cfg.get("sistema_padrao", "eSAJ")
+                escolha = pref if pref in opcoes else next((o for o in opcoes if not o.lower().startswith("selecionar")), None)
+                if escolha:
+                    sistema.select_option(label=escolha)
+            inst = self._sel_opcional("instancia")
+            if inst is not None:
+                opcoes = inst.evaluate("e => Array.from(e.options).map(o => o.textContent.trim())")
+                alvo = instancia or "1ª Instância"
+                inst.select_option(label=alvo if alvo in opcoes else opcoes[0])
+            inc = self._sel_opcional("incluir")
+            if inc is not None:
+                inc.select_option(label=self.cfg.get("suspensoes_municipais", "Não incluir"))
+            self._sel("simular").click()
+            page.wait_for_load_state("networkidle")
+            page.wait_for_timeout(1500)
+            texto = page.inner_text("body")
+            cap = self._capturar(f"conferencia-{sigla_para_site(tribunal)}-{data_publicacao.isoformat()}-{dias}")
+            if "selecione um sistema" in texto.lower():
+                return ResultadoConferencia(None, None, "site exigiu escolha de sistema (eSAJ/Eproc) não disponível", cap, texto[:500])
+            sim = interpretar_simulacao(texto, dias)
+            if not sim.get("ok"):
+                aviso = mensagem_de_aviso(texto)
+                return ResultadoConferencia(None, None, f"site recusou: {aviso}" if aviso else sim.get("motivo", "resultado ilegível"), cap, texto[:4000])
+            data_site: date = sim["data_final"]
+            obs = []
+            if sim["n_contados"] != dias:
+                obs.append(f"site contou {sim['n_contados']} dias, esperado {dias}")
+            if sim["desconsiderados"]:
+                obs.append("site desconsiderou: " + "; ".join(f"{x.strftime('%d/%m')} ({m})" for x, m in sim["desconsiderados"]))
             confere = (data_site == data_local) if data_local else None
-            return ResultadoConferencia(data_site, confere, "", cap, texto[:500])
+            return ResultadoConferencia(data_site, confere, " · ".join(obs), cap, texto[:800])
         except Exception as e:  # noqa: BLE001
             cap = self._capturar("erro")
             return ResultadoConferencia(None, None, f"erro no site: {e}", cap)
@@ -342,7 +467,7 @@ def main(argv: list[str] | None = None) -> int:
                 print("inventário gravado em", c.explorar())
             if args.testar:
                 trib, dp, dias = args.testar
-                r = c.conferir(trib, "", date.fromisoformat(dp), int(dias), args.corridos)
+                r = c.conferir(trib, "", date.fromisoformat(dp), int(dias), args.corridos, fonte="DJEN")
                 print(json.dumps({"data_site": r.data_site.isoformat() if r.data_site else None, "observacao": r.observacao,
                                   "captura": r.captura, "texto": r.texto_resultado}, ensure_ascii=False, indent=1))
     except RuntimeError as e:

@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import logging
 import shutil
 import sys
@@ -385,7 +386,13 @@ def etapa_contar_e_lancar(args: argparse.Namespace, config: dict[str, Any]) -> i
                 if conferidor is not None:
                     # regra do DJEN: tudo se conta da DISPONIBILIZAÇÃO (D0); só informe a publicação se o config mandar
                     data_inf = res.data_publicacao if lccfg.get("data_informada") == "publicacao" else d0
-                    rc = conferidor.conferir(pub["tribunal"], pub.get("classe") or "", data_inf, prazo.dias, prazo.dias_corridos, res.data_final)
+                    contexto = f"{pub.get('orgao') or ''} {pub.get('classe') or ''}".lower()
+                    regime = ("CPP" if prazo.dias_corridos and re.search(r"penal|criminal|execu[cç][aã]o penal", contexto)
+                              else "Juizado Especial" if prazo.dias_corridos else "Novo CPC")
+                    instancia = "2ª Instância" if re.search(r"c[aâ]mara|turma|desembargador|relator|se[cç][aã]o|[oó]rg[aã]o especial|plen[aá]rio", contexto) \
+                        or pub["tribunal"] in ("STJ", "STF") else "1ª Instância"
+                    rc = conferidor.conferir(pub["tribunal"], pub.get("classe") or "", data_inf, prazo.dias, prazo.dias_corridos,
+                                             res.data_final, regime=regime, instancia=instancia, fonte=pub.get("fonte") or "DJEN")
                     data_final, linha_lc, divergiu = resolver_conferencia(res.data_final, rc)
                     conferencia = {"data_site": rc.data_site.isoformat() if rc.data_site else None, "confere": rc.confere,
                                    "observacao": rc.observacao, "captura": rc.captura, "divergiu": divergiu}

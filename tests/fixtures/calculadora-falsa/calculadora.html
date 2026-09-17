@@ -1,36 +1,48 @@
-<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>Calculadora de prazos (falsa)</title></head>
+<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>Calculadora DJEN/DJE (falsa)</title></head>
 <body>
-<h1>Calculadora de prazos</h1>
+<h1>Calculadora de Prazos no DJEN/DJE</h1>
 <form id="calc">
-  <p><label for="trib">Tribunal</label>
-    <select id="trib" name="tribunal"><option value="">Selecione</option><option value="tjsp">TJSP - Tribunal de Justiça de São Paulo</option><option value="tjpr">TJPR - Tribunal de Justiça do Paraná</option></select></p>
-  <p><label for="tipo">Tipo de processo</label>
-    <select id="tipo" name="tipo"><option>Cível</option><option>Juizado Especial</option></select></p>
-  <p><label for="dp">Data da publicação</label> <input id="dp" name="data_publicacao" placeholder="dd/mm/aaaa"></p>
-  <p><label for="dias">Prazo (dias)</label> <input id="dias" name="dias" type="number"></p>
-  <p><label><input type="radio" name="cont" value="uteis" checked> Dias úteis</label>
-     <label><input type="radio" name="cont" value="corridos"> Dias corridos</label></p>
-  <button type="submit">Calcular</button>
+  <p>Disponibilização no <select name="meio_comunicacao"><option>DJE</option><option>DJEN</option></select>
+     em <input name="data_disponibilizacao" type="tel" placeholder="Informe a data"></p>
+  <p>Prazo de <input id="dias_novo" name="dias" type="number"> dias no
+     <select name="codigo"><option>Novo CPC</option><option>CPP</option><option>Antiga CLT</option><option>Juizado Especial</option><option>CLT 2017</option></select></p>
+  <p>O processo está no <select name="tribunal"><option>STJ</option><option>TJPR</option><option>TJSP</option><option>TRF-3</option></select></p>
+  <p>Ele é <select name="tipo_processo"><option>Físico</option><option>Eletrônico</option></select>
+     no sistema <select id="sistema"><option>Selecionar...</option><option>eSAJ</option><option>Eproc</option></select>
+     e de <select name="instancia"><option>1ª Instância</option><option>2ª Instância</option></select></p>
+  <p><select name="incluir"><option>Não incluir</option><option>Incluir</option></select> suspensões municipais</p>
+  <button type="submit" id="primeiro_calculo" name="calculadora">Simular</button>
 </form>
 <div id="resultado"></div>
 <script>
-// Feriados do site falso: 12/10/2026 só para o TJSP (para simular divergência com uma contagem local sem esse feriado).
-const FERIADOS = {tjsp: ['2026-10-12', '2026-11-02'], tjpr: ['2026-11-02']};
+// Feriados do site falso: 12/10/2026 (TJSP) — para simular divergência com uma contagem local sem esse feriado.
+const FERIADOS = {TJSP: {'2026-10-12': 'Feriado Nacional - Nossa Senhora Aparecida', '2026-11-02': 'Feriado - Finados'}, 'TRF-3': {'2026-11-02': 'Finados'}};
+const DIAS = ['Domingo','Segunda-feira','Terça-feira','Quarta-feira','Quinta-feira','Sexta-feira','Sábado'];
 function iso(d) { return d.toISOString().slice(0, 10); }
-function util(d, trib) { const w = d.getUTCDay(); return w !== 0 && w !== 6 && !(FERIADOS[trib] || []).includes(iso(d)); }
+function fmt(d) { return `${String(d.getUTCDate()).padStart(2,'0')}/${String(d.getUTCMonth()+1).padStart(2,'0')}/${d.getUTCFullYear()}`; }
+function motivo(d, trib) { const w = d.getUTCDay(); if (w === 0 || w === 6) return 'Final de Semana'; return (FERIADOS[trib]||{})[iso(d)] || null; }
 document.getElementById('calc').addEventListener('submit', function (ev) {
   ev.preventDefault();
-  const trib = document.getElementById('trib').value;
-  const [dd, mm, aa] = document.getElementById('dp').value.split('/').map(Number);
-  const dias = Number(document.getElementById('dias').value);
-  const corridos = document.querySelector('input[name=cont]:checked').value === 'corridos';
+  const f = ev.target;
+  if (f.tribunal.value === 'TJSP' && document.getElementById('sistema').value === 'Selecionar...') {
+    document.getElementById('resultado').textContent = 'Selecione um sistema desse Tribunal'; return;
+  }
+  const [dd, mm, aa] = f.data_disponibilizacao.value.split('/').map(Number);
+  const dias = Number(f.dias.value), trib = f.tribunal.value;
+  const corridos = f.codigo.value === 'Juizado Especial' || f.codigo.value === 'CPP';
   let d = new Date(Date.UTC(aa, mm - 1, dd));
-  // dia 1 = primeiro dia útil após a publicação
-  do { d.setUTCDate(d.getUTCDate() + 1); } while (!util(d, trib));
-  let n = 1;
-  while (n < dias) { d.setUTCDate(d.getUTCDate() + 1); if (corridos || util(d, trib)) n++; }
-  while (!util(d, trib)) d.setUTCDate(d.getUTCDate() + 1);
-  const fmt = `${String(d.getUTCDate()).padStart(2, '0')}/${String(d.getUTCMonth() + 1).padStart(2, '0')}/${d.getUTCFullYear()}`;
-  document.getElementById('resultado').innerHTML = `<p>Publicado em ${document.getElementById('dp').value}.</p><p><b>Prazo final:</b> ${fmt}</p>`;
+  const linhas = ['Simulação do dia do começo', `${fmt(d)} -`, 'Data de Disponibilização'];
+  do { d.setUTCDate(d.getUTCDate() + 1); } while (motivo(d, trib));   // dia do começo = 1º dia útil após D0
+  linhas.push('Simulação do prazo processual', `${fmt(d)} -`, 'Dia do começo');
+  let n = 0;
+  while (n < dias) {
+    d.setUTCDate(d.getUTCDate() + 1);
+    const m = motivo(d, trib);
+    if (m && !corridos) { linhas.push(`${fmt(d)} -`, m); continue; }
+    n++; linhas.push(String(n), `${fmt(d)} - ${DIAS[d.getUTCDay()]}`);
+  }
+  while (motivo(d, trib)) { d.setUTCDate(d.getUTCDate() + 1); linhas.push(String(n), `${fmt(d)} - ${DIAS[d.getUTCDay()]} (prorrogação)`); }
+  linhas.push('Legenda', 'Dia considerado na simulação.');
+  document.getElementById('resultado').innerText = linhas.join('\n');
 });
 </script></body></html>
