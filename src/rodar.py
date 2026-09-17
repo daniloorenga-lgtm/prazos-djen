@@ -592,11 +592,23 @@ def etapa_email(args: argparse.Namespace, config: dict[str, Any]) -> int:
             "flags": {"dry_run": bool(args.dry_run), "somente_email": False}, "alertas": [], "publicacoes": [],
             "prazos": [], "fontes_status": {"DJEN": "falha"}, "erros_coleta": [], "calendario": {}, "email": {"enviado": False}}
         ex["erro_coleta"] = args.erro_coleta or "falha na coleta (duas tentativas)"
+        ex["alertas"] = [a for a in ex["alertas"] if not a.startswith("COLETA FALHOU")]
         ex["alertas"].append(f"COLETA FALHOU duas vezes: {ex['erro_coleta']}. Publicações do dia NÃO foram processadas.")
     if not ex:
         print("ERRO: sem estado/execucao.json")
         return 2
-    ex["flags"]["dry_run"] = ex["flags"].get("dry_run") or bool(args.dry_run)
+    ex["flags"]["dry_run"] = bool(args.dry_run)   # decidido por ESTA invocação, não pelo estado de etapas anteriores
+    ecfg = config["email"]
+    destinatarios = list(ecfg["destinatarios"])
+    if args.para:
+        pedidos = [d.strip().lower() for d in args.para.split(",") if d.strip()]
+        fora = [d for d in pedidos if d not in [x.lower() for x in destinatarios]]
+        if fora:
+            print(f"ERRO: --para só aceita destinatários do config.yaml; não permitidos: {fora}")
+            return 2
+        destinatarios = [d for d in destinatarios if d.lower() in pedidos]
+        ex["alertas"] = [a for a in ex["alertas"] if not a.startswith("E-MAIL DE TESTE")]
+        ex["alertas"].insert(0, f"E-MAIL DE TESTE enviado só para {', '.join(destinatarios)} (--para).")
     assunto, html, texto = relatorio_email.montar_email(ex)
     anexo = relatorio_email.anexo_recortes(ex)
     nome_anexo = f"recortes-{ex['data_referencia']}.txt"
@@ -612,17 +624,6 @@ def etapa_email(args: argparse.Namespace, config: dict[str, Any]) -> int:
         ex["email"] = {"enviado": False, "assunto": assunto, "dry_run": True}
         gravar_json(ARQ_EXEC, ex)
         return 0
-    ecfg = config["email"]
-    destinatarios = list(ecfg["destinatarios"])
-    if args.para:
-        pedidos = [d.strip().lower() for d in args.para.split(",") if d.strip()]
-        fora = [d for d in pedidos if d not in [x.lower() for x in destinatarios]]
-        if fora:
-            print(f"ERRO: --para só aceita destinatários do config.yaml; não permitidos: {fora}")
-            return 2
-        destinatarios = [d for d in destinatarios if d.lower() in pedidos]
-        ex["alertas"].insert(0, f"E-MAIL DE TESTE enviado só para {', '.join(destinatarios)} (--para).")
-        assunto, html, texto = relatorio_email.montar_email(ex)
     try:
         resp = relatorio_email.enviar(ecfg["remetente"], destinatarios, assunto, html, texto, nome_anexo, anexo)
         ex["email"] = {"enviado": True, "assunto": assunto, "id": resp.get("id"), "em": datetime.now().isoformat(timespec="seconds"),

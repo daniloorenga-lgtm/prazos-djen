@@ -238,6 +238,14 @@ class ColetorMock:
         return out, None
 
 
+def _resumo_erro(erro: str) -> str:
+    """Versão curta para o rodapé do e-mail (o texto completo vai em Alertas)."""
+    m = re.search(r"(Tunnel connection failed: [^')]+|HTTP \d{3}[^:(]*|timed out|Connection refused|Name or service not known|resposta sem 'items')", erro)
+    if m:
+        return m.group(1).strip()
+    return (erro[:117] + "…") if len(erro) > 120 else erro
+
+
 def coletar(config: dict[str, Any], inicio: date, fim: date, pasta_logs: Path,
             coletor: ColetorDJEN | None = None) -> tuple[list[Publicacao], list[str], dict[str, str]]:
     """Consulta todos os advogados. Devolve (publicações, erros, status por fonte).
@@ -263,7 +271,7 @@ def coletar(config: dict[str, Any], inicio: date, fim: date, pasta_logs: Path,
         bruto["advogados"][adv["apelido"]] = {"erro": erro, "itens": itens}
         if erro:
             erros.append(erro)
-            status[chave] = f"falha ({erro})"
+            status[chave] = f"falha ({_resumo_erro(erro)})"
         else:
             status[chave] = f"ok ({len(itens)} itens)"
         for item in itens:
