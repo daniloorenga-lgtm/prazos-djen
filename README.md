@@ -61,6 +61,10 @@ o site; desligue com `legalcloud.conferir_no_dry_run: false`), `--somente-email`
 
 ### Primeiro teste real (publicações de hoje, e-mail só para você, sem criar cartões)
 
+Atalho: `./scripts/testar_hoje.sh` (para na classificação) e depois `./scripts/testar_hoje.sh --continuar`.
+Prompt pronto para o Claude Code fazer tudo, inclusive classificar: `docs/05-prompt-teste.md`.
+Para rodar numa sessão do Claude Code na web (rede liberada + variáveis de ambiente + hook): `docs/04-ambiente-web.md`.
+
 ```bash
 python src/rodar.py --etapa coletar --somente-email --data $(date +%F)
 #   → classificar estado/pendentes.json em estado/classificadas.json (Claude Code na pasta, ou à mão, formato em CLAUDE.md)
