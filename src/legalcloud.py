@@ -8,8 +8,8 @@ Calibração (primeiro uso):  python src/legalcloud.py --explorar
   → faz login, abre a calculadora e grava em logs/legalcloud/ a captura de tela, o HTML e um
     inventário de campos (labels, names, selects com opções, botões). Ajuste `legalcloud.campos`
     no config.yaml se algum candidato não bater.
-Teste manual:               python src/legalcloud.py --testar TJSP 2026-09-18 15
-Fonte simulada (validação): PRAZOS_LEGALCLOUD_MOCK=arquivo.json  ({"TJSP|2026-09-18|15|uteis": "2026-10-09", "*": "igual"})
+Teste manual:               python src/legalcloud.py --testar TJSP 2026-09-17 15   (data = DISPONIBILIZAÇÃO)
+Fonte simulada (validação): PRAZOS_LEGALCLOUD_MOCK=arquivo.json  ({"TJSP|2026-09-17|15|uteis": "2026-10-09", "*": "igual"}; chave = tribunal|D0|dias|uteis/corridos)
 """
 from __future__ import annotations
 
@@ -253,6 +253,8 @@ class ConferidorLegalcloud:
 
     def conferir(self, tribunal: str, tipo_processo: str, data_publicacao: date, dias: int,
                  dias_corridos: bool, data_local: date | None = None) -> ResultadoConferencia:
+        """`data_publicacao` é a data inicial informada ao site — por padrão a de DISPONIBILIZAÇÃO (D0),
+        regra do DJEN (config `legalcloud.data_informada`)."""
         self.chamadas += 1
         try:
             self.abrir_calculadora()

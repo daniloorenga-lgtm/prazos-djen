@@ -23,17 +23,18 @@ python -m pytest -q           # tudo deve passar antes de qualquer execução re
    não há "Marcelo Antonio Muriel" no quadro; ou ele é convidado, ou o quarto membro em `config.yaml` deve ser Marcela.
 3. **Legalcloud (conferência de prazos, §0 uso_2):** a rotina diária abre a calculadora
    (https://app.legalcloud.com.br/calculadora/) em Chromium headless, faz login com `LEGALCLOUD_USER`/`LEGALCLOUD_PASS`
-   e confere **todo prazo marcado `CONFERIR CONTAGEM`** (tribunal, tipo de processo, data de publicação, dias, úteis/corridos).
+   e confere **todo prazo marcado `CONFERIR CONTAGEM`** (tribunal, tipo de processo, **data de disponibilização** — regra do
+   DJEN: tudo se conta de D0 —, dias, úteis/corridos).
    O resultado vai para a descrição do cartão ("Legalcloud: DD/MM — confere / DIVERGE …"); se divergir, **prevalece a data
    mais curta** como fatal, a outra fica na descrição e o e-mail destaca. Como o layout do site não pôde ser inspecionado
    na construção, **calibre uma vez**:
    ```bash
    python src/legalcloud.py --explorar                 # login + inventário dos campos em logs/legalcloud/
-   python src/legalcloud.py --testar TJSP 2026-09-18 15   # deve responder 09/10/2026
+   python src/legalcloud.py --testar TJSP 2026-09-17 15   # data = disponibilização; deve responder 09/10/2026
    ```
    Se algum campo não for encontrado, ajuste `legalcloud.campos` no `config.yaml` (lista de candidatos por campo:
-   `label=…`, `css=…`, `role=button:…`, `text=…`) com base no inventário. `legalcloud.data_informada` define se o site
-   recebe a data de publicação (padrão) ou a de disponibilização. O driver foi testado contra uma calculadora falsa
+   `label=…`, `css=…`, `role=button:…`, `text=…`) com base no inventário. `legalcloud.data_informada` fica em `disponibilizacao` (padrão, regra do DJEN);
+   só mude para `publicacao` se a calculadora do site exigir explicitamente a data de publicação. O driver foi testado contra uma calculadora falsa
    (`tests/fixtures/calculadora-falsa/`), não contra o site real.
 4. **Calendário:** `dados/feriados-forenses.json` vem com o calendário nacional de 2026 preenchido à mão.
    Substitua pela extração do Legalcloud (rotina semanal, `docs/03-prompt-legalcloud-semanal.md`).

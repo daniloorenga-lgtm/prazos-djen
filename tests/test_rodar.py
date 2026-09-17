@@ -19,8 +19,8 @@ def ambiente(tmp_path, monkeypatch):
         monkeypatch.setattr(rodar, f"ARQ_{nome}", estado / getattr(rodar, f"ARQ_{nome}").name)
     monkeypatch.setenv("PRAZOS_DJEN_MOCK", str(MOCK))
     mock_lc = tmp_path / "legalcloud-mock.json"
-    # JEC: publicação 11/09, 5 corridos → local 18/09; o "site" responde 17/09 → diverge, prevalece 17/09
-    mock_lc.write_text(json.dumps({"TJSP|2026-09-11|5|corridos": "2026-09-17", "*": "igual"}), encoding="utf-8")
+    # JEC: disponibilização 10/09 (chave = D0, regra do DJEN), 5 corridos → local 18/09; o "site" responde 17/09 → diverge
+    mock_lc.write_text(json.dumps({"TJSP|2026-09-10|5|corridos": "2026-09-17", "*": "igual"}), encoding="utf-8")
     monkeypatch.setenv("PRAZOS_LEGALCLOUD_MOCK", str(mock_lc))
     monkeypatch.delenv("TRELLO_KEY", raising=False)
     return estado, logs

@@ -62,7 +62,7 @@ legalcloud:
   timeout_segundos: 45
   headless: true
   conferir_no_dry_run: true       # a conferência só lê o site; pode rodar em --dry-run
-  data_informada: publicacao      # publicacao | disponibilizacao — o que o site pede como data inicial
+  data_informada: disponibilizacao   # o DJEN trabalha sempre por data de disponibilização (D0); é ela que se informa ao site
   tribunais_nomes:                # como o site escreve cada tribunal (se diferente da sigla)
     TJSP: TJSP
     TJPR: TJPR

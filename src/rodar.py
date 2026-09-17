@@ -383,7 +383,8 @@ def etapa_contar_e_lancar(args: argparse.Namespace, config: dict[str, Any]) -> i
             if conferir:
                 conferidor = obter_conferidor()
                 if conferidor is not None:
-                    data_inf = d0 if lccfg.get("data_informada") == "disponibilizacao" else res.data_publicacao
+                    # regra do DJEN: tudo se conta da DISPONIBILIZAÇÃO (D0); só informe a publicação se o config mandar
+                    data_inf = res.data_publicacao if lccfg.get("data_informada") == "publicacao" else d0
                     rc = conferidor.conferir(pub["tribunal"], pub.get("classe") or "", data_inf, prazo.dias, prazo.dias_corridos, res.data_final)
                     data_final, linha_lc, divergiu = resolver_conferencia(res.data_final, rc)
                     conferencia = {"data_site": rc.data_site.isoformat() if rc.data_site else None, "confere": rc.confere,
