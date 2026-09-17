@@ -613,8 +613,18 @@ def etapa_email(args: argparse.Namespace, config: dict[str, Any]) -> int:
         gravar_json(ARQ_EXEC, ex)
         return 0
     ecfg = config["email"]
+    destinatarios = list(ecfg["destinatarios"])
+    if args.para:
+        pedidos = [d.strip().lower() for d in args.para.split(",") if d.strip()]
+        fora = [d for d in pedidos if d not in [x.lower() for x in destinatarios]]
+        if fora:
+            print(f"ERRO: --para só aceita destinatários do config.yaml; não permitidos: {fora}")
+            return 2
+        destinatarios = [d for d in destinatarios if d.lower() in pedidos]
+        ex["alertas"].insert(0, f"E-MAIL DE TESTE enviado só para {', '.join(destinatarios)} (--para).")
+        assunto, html, texto = relatorio_email.montar_email(ex)
     try:
-        resp = relatorio_email.enviar(ecfg["remetente"], list(ecfg["destinatarios"]), assunto, html, texto, nome_anexo, anexo)
+        resp = relatorio_email.enviar(ecfg["remetente"], destinatarios, assunto, html, texto, nome_anexo, anexo)
         ex["email"] = {"enviado": True, "assunto": assunto, "id": resp.get("id"), "em": datetime.now().isoformat(timespec="seconds"),
                        "n_prazos": sum(1 for x in ex.get("prazos", []) if x["status"] in ("LANCADO", "ATUALIZADO", "DRY_RUN"))}
         print(f"EMAIL ENVIADO: id={resp.get('id')} · assunto='{assunto}' · prazos={ex['email']['n_prazos']}")
@@ -687,6 +697,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--erro-coleta", nargs="?", const="", help="com --etapa email: envia o e-mail de alerta de falha na coleta")
     ap.add_argument("--forcar", action="store_true", help="com --etapa fechar: grava estado mesmo sem e-mail enviado")
     ap.add_argument("--sem-legalcloud", action="store_true", help="não conferir prazos no site do Legalcloud")
+    ap.add_argument("--para", help="com --etapa email: restringe o envio a estes destinatários (subconjunto do config.yaml), p.ex. para teste")
     args = ap.parse_args(argv)
     arq_log = configurar_log()
     config = carregar_config()

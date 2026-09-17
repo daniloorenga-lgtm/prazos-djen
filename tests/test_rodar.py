@@ -111,6 +111,19 @@ def test_divergencia_legalcloud_prevalece_a_mais_curta(ambiente):
     assert "Legalcloud indisponível" in (logs / "email-2026-09-17.txt").read_text(encoding="utf-8")
 
 
+def test_para_so_aceita_subconjunto_dos_destinatarios(ambiente, monkeypatch):
+    estado, logs = ambiente
+    assert rodar.main(["--etapa", "coletar", "--dry-run", "--data", "2026-01-05"]) == 0
+    assert rodar.main(["--etapa", "contar-e-lancar", "--dry-run"]) == 0
+    ex = json.loads((estado / "execucao.json").read_text(encoding="utf-8")); ex["flags"]["dry_run"] = False
+    (estado / "execucao.json").write_text(json.dumps(ex), encoding="utf-8")
+    assert rodar.main(["--etapa", "email", "--para", "alguem@fora.com"]) == 2       # não acrescenta destinatário
+    enviados = {}
+    monkeypatch.setattr(rodar.relatorio_email, "enviar", lambda rem, dest, assunto, html, texto, *a: enviados.update(dest=dest, texto=texto) or {"id": "x"})
+    assert rodar.main(["--etapa", "email", "--para", "dorenga@muriel.adv.br"]) == 0
+    assert enviados["dest"] == ["dorenga@muriel.adv.br"] and "E-MAIL DE TESTE" in enviados["texto"]
+
+
 def test_email_sem_publicacoes_e_erro_coleta(ambiente):
     estado, logs = ambiente
     assert rodar.main(["--etapa", "coletar", "--dry-run", "--data", "2026-01-05"]) == 0

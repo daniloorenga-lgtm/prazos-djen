@@ -56,7 +56,19 @@ python src/rodar.py --etapa fechar             # só grava estado se o e-mail fo
 Flags: `--dry-run` (não cria cartão, não envia e-mail; imprime tudo — a conferência no Legalcloud ainda roda, pois só lê
 o site; desligue com `legalcloud.conferir_no_dry_run: false`), `--somente-email` (não cria cartão; envia com aviso
 "MODO DE VALIDAÇÃO"), `--data AAAA-MM-DD [--ate AAAA-MM-DD]` (força a janela), `--sem-legalcloud` (pula a conferência),
-`--etapa email --erro-coleta "motivo"` (e-mail de alerta quando a coleta falhou duas vezes).
+`--etapa email --erro-coleta "motivo"` (e-mail de alerta quando a coleta falhou duas vezes),
+`--etapa email --para dorenga@muriel.adv.br` (envio só a um subconjunto dos destinatários do `config.yaml`, para teste).
+
+### Primeiro teste real (publicações de hoje, e-mail só para você, sem criar cartões)
+
+```bash
+python src/rodar.py --etapa coletar --somente-email --data $(date +%F)
+#   → classificar estado/pendentes.json em estado/classificadas.json (Claude Code na pasta, ou à mão, formato em CLAUDE.md)
+python src/rodar.py --etapa contar-e-lancar --somente-email          # conta + confere no Legalcloud; nenhum cartão
+python src/rodar.py --etapa autoverificar
+python src/rodar.py --etapa email --para dorenga@muriel.adv.br        # envia com aviso "MODO DE VALIDAÇÃO"
+#   não rode --etapa fechar num teste: a janela real não deve avançar
+```
 
 Sem `--etapa`, roda tudo e **para** depois da coleta se `estado/classificadas.json` não existir.
 
