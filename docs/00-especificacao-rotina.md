@@ -103,6 +103,45 @@ Regras de desempate:
 
 ---
 
+### 3.1 Tabela de prazos por ato
+
+Como usar: quando a publicação nomeia o ato sem fixar prazo, `dias` sai desta tabela e o `motivo` cita o fundamento.
+Prazo fixado no texto prevalece sobre a tabela. Atos cujo termo inicial não é a publicação (contestação, embargos à
+execução, impugnação ao cumprimento, pagamento na execução, rescisória) saem sempre com `conferir: true` e a explicação
+em `duvida`. Ato não listado e sem prazo no texto: 5 dias (art. 218, §3º) — e, na dúvida, também 15.
+
+| Ato / situação | Prazo | Fundamento |
+|---|---|---|
+| Contestação | 15 dias | art. 335 (termo: audiência de conciliação, pedido de cancelamento ou art. 231) |
+| Réplica (preliminares ou fato novo) | 15 dias | arts. 350-351 |
+| Emenda à inicial | 15 dias | art. 321 |
+| Impugnação à gratuidade | 15 dias / na contestação | art. 100 / art. 337, XIII |
+| Manifestação sobre documentos juntados | 15 dias | art. 437, §1º |
+| Quesitos e assistente técnico | 15 dias | art. 465, §1º |
+| Manifestação sobre laudo pericial | 15 dias | art. 477, §1º |
+| Especificação de provas / atos sem prazo | 5 dias (ou o judicial) | art. 218, §3º |
+| Embargos de declaração | 5 dias | art. 1.023 |
+| Contrarrazões aos EDs | 5 dias | art. 1.023, §2º |
+| Apelação | 15 dias | arts. 1.003, §5º; 1.009 |
+| Contrarrazões de apelação | 15 dias | art. 1.010, §1º |
+| Recurso adesivo | prazo das contrarrazões | art. 997, §2º |
+| Agravo de instrumento | 15 dias | arts. 1.003, §5º; 1.015-1.016 |
+| Contrarrazões de agravo | 15 dias | art. 1.019, II |
+| Agravo interno | 15 dias | art. 1.021 |
+| REsp / RE | 15 dias | arts. 1.003, §5º; 1.029 |
+| Contrarrazões de REsp/RE | 15 dias | art. 1.030 |
+| Agravo em REsp/RE | 15 dias | art. 1.042 |
+| Sanar vício de recurso (preparo, representação) | 5 dias | arts. 932, p.ú.; 1.007, §§2º e 4º |
+| IDPJ — manifestação do requerido | 15 dias | art. 135 |
+| Cumprimento de sentença — pagamento voluntário | 15 dias | art. 523 (dias úteis: STJ, REsp 1.708.348) |
+| Impugnação ao cumprimento | 15 dias após o fim do prazo de pagamento, independente de penhora | art. 525 |
+| Execução de título extrajudicial — pagamento | 3 dias | art. 829 (contagem em dias úteis é controvertida na doutrina; sinalizar) |
+| Embargos à execução | 15 dias da juntada do mandado | art. 915 |
+| Ação rescisória | 2 anos do trânsito (decadencial, corridos) | art. 975 |
+| Manifestação pessoal para evitar abandono | 5 dias | art. 485, §1º |
+
+---
+
 ## 4. CONTAGEM DO PRAZO
 
 ### 4.1 Regra base (arts. 219, 224 e 231 CPC)
@@ -191,7 +230,7 @@ Envie **um único e-mail** por execução, mesmo que não haja publicação.
 1. **Resumo em uma linha:** "N publicações · M prazos lançados · K alertas".
 2. **Alertas** (só se houver): fontes que falharam; prazos não lançados no Trello; publicações com D0 anterior a ontem; prazos com `CONFERIR CONTAGEM`; categoria `INDETERMINADA`.
 3. **Prazos lançados no Trello** — tabela: Prazo fatal · Lembrete · Processo · Cliente · Ato · Advogado intimado · Link do cartão · Etiquetas. Ordenada por prazo fatal crescente.
-4. **Publicações do dia, por advogado** — para cada uma: processo, tribunal/órgão, categoria, resumo em 1–2 linhas do comando judicial, prazos derivados. Texto integral em anexo ou ao final, não no corpo principal.
+4. **Publicações do dia, por advogado** — para cada uma: processo, tribunal/órgão, categoria, resumo em 1–2 linhas do comando judicial, prazos derivados e, **dentro do bloco de cada publicação, o texto integral do recorte** (cópia literal, sem resumir nem cortar). O anexo com os recortes continua sendo enviado, mas o corpo do e-mail já traz o texto de cada publicação.
 5. **Pautas e audiências** (datas, sem prazo).
 6. **Sem providência** (mera ciência, republicações sem alteração, contraparte).
 7. **Rodapé:** janela de busca utilizada, fontes consultadas (com status ok/falha), horário de execução, data/hora da última extração de feriados do Legalcloud, quantos prazos foram conferidos no site.

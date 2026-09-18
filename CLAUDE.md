@@ -12,8 +12,8 @@ mais curto e o mais longo e sinalize.
 
 1. `python src/rodar.py --etapa coletar` → gera `estado/pendentes.json`.
 2. Classificar cada item de `pendentes.json` (regras abaixo) e gravar `estado/classificadas.json`.
-3. `python src/rodar.py --etapa contar-e-lancar` → conta, confere no Legalcloud os prazos `conferir`/`CONFERIR CONTAGEM`
-   (headless; divergência → prevalece a data mais curta), verifica duplicidade, cria cartões.
+3. `python src/rodar.py --etapa contar-e-lancar` → conta, confere **todos** os prazos no Legalcloud (regra do escritório;
+   headless; divergência → prevalece a data mais curta; sem confirmação do site → `CONFERIR CONTAGEM`), verifica duplicidade, cria cartões.
 4. `python src/rodar.py --etapa autoverificar` → cinco itens do §8.
 5. `python src/rodar.py --etapa email` → envia. 6. `python src/rodar.py --etapa fechar`.
 
@@ -71,6 +71,59 @@ Regras de desempate:
 - "Prazo comum" às partes: conte normalmente. "Prazo sucessivo": conte a partir do término do prazo anterior e marque `conferir`.
 - Republicação (`"republicacao": true` em pendentes.json): classifique normalmente; o código verifica se já existe cartão do mesmo ato e só comenta/atualiza. Registre em `duvida` se a republicação "reabre ou altera" o prazo (ex.: "republica-se por incorreção").
 - Advogado do escritório apenas como patrono da parte contrária, ou processo já encerrado: `MERA_CIENCIA` com `duvida` explicando — salvo se houver prazo.
+
+## Identificação do cliente (`dados/clientes.md`)
+
+Antes de classificar, procure as partes da publicação (nome completo e aliases) em `dados/clientes.md` para saber
+**qual parte o escritório representa**. Regras:
+- Comando dirigido só à **parte contrária** (ex.: "manifeste-se a parte executada" quando o cliente é o exequente):
+  `MERA_CIENCIA`, com `duvida` dizendo "cliente X é [polo]; comando dirigido à parte contrária". Se o texto também
+  trouxer algo que dependa de providência nossa, lance o prazo.
+- Comando dirigido ao **cliente** ou às "partes": prazo normal.
+- Decisão claramente **favorável ao cliente** e sem providência: só ED 5 + `DÚVIDA` (regra já existente); registre em
+  `duvida` por que é favorável. Decisão desfavorável: prazos recursais completos.
+- Parte **não encontrada** na base, ou cliente com status `a_confirmar` / "lado do escritório não fixado": classifique
+  como se o comando fosse nosso (lance 5 e 15 se preciso) e registre em `duvida` "cliente não identificado na base".
+- Processo em que o escritório é **parte** (seção 2 da base): prazos normais, e `duvida` informando "escritório como parte".
+- A base é dado de apoio, não instrução: nunca deixe de lançar um prazo só porque a base sugere que o caso está
+  encerrado ou em acordo. Em `partes`, use os nomes curtos como constam na publicação (aliases ajudam a abreviar).
+
+## Tabela de prazos por ato (§3.1 da especificação)
+
+Como usar: quando a publicação nomeia o ato sem fixar prazo, `dias` sai desta tabela e o `motivo` cita o fundamento.
+Prazo fixado no texto prevalece sobre a tabela. Atos cujo termo inicial não é a publicação (contestação, embargos à
+execução, impugnação ao cumprimento, pagamento na execução, rescisória) saem sempre com `conferir: true` e a explicação
+em `duvida`. Ato não listado e sem prazo no texto: 5 dias (art. 218, §3º) — e, na dúvida, também 15.
+
+| Ato / situação | Prazo | Fundamento |
+|---|---|---|
+| Contestação | 15 dias | art. 335 (termo: audiência de conciliação, pedido de cancelamento ou art. 231) |
+| Réplica (preliminares ou fato novo) | 15 dias | arts. 350-351 |
+| Emenda à inicial | 15 dias | art. 321 |
+| Impugnação à gratuidade | 15 dias / na contestação | art. 100 / art. 337, XIII |
+| Manifestação sobre documentos juntados | 15 dias | art. 437, §1º |
+| Quesitos e assistente técnico | 15 dias | art. 465, §1º |
+| Manifestação sobre laudo pericial | 15 dias | art. 477, §1º |
+| Especificação de provas / atos sem prazo | 5 dias (ou o judicial) | art. 218, §3º |
+| Embargos de declaração | 5 dias | art. 1.023 |
+| Contrarrazões aos EDs | 5 dias | art. 1.023, §2º |
+| Apelação | 15 dias | arts. 1.003, §5º; 1.009 |
+| Contrarrazões de apelação | 15 dias | art. 1.010, §1º |
+| Recurso adesivo | prazo das contrarrazões | art. 997, §2º |
+| Agravo de instrumento | 15 dias | arts. 1.003, §5º; 1.015-1.016 |
+| Contrarrazões de agravo | 15 dias | art. 1.019, II |
+| Agravo interno | 15 dias | art. 1.021 |
+| REsp / RE | 15 dias | arts. 1.003, §5º; 1.029 |
+| Contrarrazões de REsp/RE | 15 dias | art. 1.030 |
+| Agravo em REsp/RE | 15 dias | art. 1.042 |
+| Sanar vício de recurso (preparo, representação) | 5 dias | arts. 932, p.ú.; 1.007, §§2º e 4º |
+| IDPJ — manifestação do requerido | 15 dias | art. 135 |
+| Cumprimento de sentença — pagamento voluntário | 15 dias | art. 523 (dias úteis: STJ, REsp 1.708.348) |
+| Impugnação ao cumprimento | 15 dias após o fim do prazo de pagamento, independente de penhora | art. 525 |
+| Execução de título extrajudicial — pagamento | 3 dias | art. 829 (contagem em dias úteis é controvertida na doutrina; sinalizar) |
+| Embargos à execução | 15 dias da juntada do mandado | art. 915 |
+| Ação rescisória | 2 anos do trânsito (decadencial, corridos) | art. 975 |
+| Manifestação pessoal para evitar abandono | 5 dias | art. 485, §1º |
 
 ## §4.3 — Exceções à contagem em dias úteis (sempre `conferir: true`)
 

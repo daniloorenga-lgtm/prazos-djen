@@ -338,6 +338,16 @@ class ConferidorLegalcloud:
         url = self.cfg.get("url_calculadora") or self.cfg["url"]
         self.page.goto(url, wait_until="domcontentloaded")
         self.page.wait_for_load_state("networkidle")
+        self._remover_aviso_cookies()
+
+    def _remover_aviso_cookies(self) -> None:
+        """O banner de cookies (CookieHub, classe .ch2) cobre o botão Simular. Removemos o elemento da
+        página em vez de aceitar os cookies — só some da tela, nada é consentido."""
+        try:
+            self.page.evaluate(
+                "document.querySelectorAll('.ch2, [id^=\"ch2-\"], #cookiehub, .cookiehub').forEach(e => e.remove())")
+        except Exception as e:  # pragma: no cover
+            log.debug("aviso de cookies não removido: %s", e)
 
     def _sel(self, chave: str):
         css = (self.cfg.get("campos_djen") or {}).get(chave) or CAMPOS_DJEN[chave]
@@ -386,6 +396,7 @@ class ConferidorLegalcloud:
             inc = self._sel_opcional("incluir")
             if inc is not None:
                 inc.select_option(label=self.cfg.get("suspensoes_municipais", "Não incluir"))
+            self._remover_aviso_cookies()
             self._sel("simular").click()
             page.wait_for_load_state("networkidle")
             page.wait_for_timeout(1500)

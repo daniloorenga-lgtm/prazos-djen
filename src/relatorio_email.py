@@ -38,7 +38,7 @@ def _e(s: Any) -> str:
 
 
 def montar_email(ex: dict[str, Any]) -> tuple[str, str, str]:
-    """Devolve (assunto, html, texto). Segue a ordem do §6."""
+    """Devolve (assunto, html, texto). Ordem: resumo → alertas → publicações → prazos → pautas → sem providência → rodapé."""
     hoje = date.fromisoformat(ex["data_referencia"])
     pubs: list[dict[str, Any]] = ex.get("publicacoes", [])
     prazos: list[dict[str, Any]] = ex.get("prazos", [])
@@ -67,65 +67,169 @@ def montar_email(ex: dict[str, Any]) -> tuple[str, str, str]:
             assunto = "[ATENÇÃO] " + assunto
 
     T: list[str] = []   # texto
-    H: list[str] = []   # html
+    H: list[str] = []   # html (blocos dentro do container)
 
-    def sec(titulo: str) -> None:
+    # ---- paleta e estilos inline (compatíveis com Gmail/Outlook) ----
+    C_TXT, C_MUTED, C_LINE, C_BG, C_CARD = "#1f2933", "#6b7280", "#e5e7eb", "#f3f4f6", "#ffffff"
+    C_PRIM, C_PRIM_BG = "#1d4ed8", "#eff6ff"
+    C_WARN_BG, C_WARN_TX, C_WARN_LN = "#fef9c3", "#713f12", "#fde68a"
+    C_ERR_BG, C_ERR_TX, C_ERR_LN = "#fee2e2", "#7f1d1d", "#fca5a5"
+    C_OK_TX = "#166534"
+    FONT = "font-family:-apple-system,Segoe UI,Helvetica,Arial,sans-serif;"
+
+    def sec(titulo: str, nota: str = "") -> None:
         T.append(f"\n== {titulo} ==")
-        H.append(f"<h3>{_e(titulo)}</h3>")
+        H.append(f"<h2 style='{FONT}font-size:15px;letter-spacing:.04em;text-transform:uppercase;color:{C_MUTED};"
+                 f"margin:28px 0 10px;padding-bottom:6px;border-bottom:2px solid {C_LINE}'>{_e(titulo)}"
+                 + (f" <span style='font-weight:normal;text-transform:none;letter-spacing:0'>{_e(nota)}</span>" if nota else "")
+                 + "</h2>")
 
-    def par(txt: str) -> None:
+    def par(txt: str, cor: str = C_TXT) -> None:
         T.append(txt)
-        H.append(f"<p>{_e(txt)}</p>")
+        H.append(f"<p style='{FONT}font-size:14px;line-height:1.5;color:{cor};margin:6px 0'>{_e(txt)}</p>")
 
     def lista(itens: list[str]) -> None:
         for i in itens:
             T.append(f" - {i}")
-        H.append("<ul>" + "".join(f"<li>{_e(i)}</li>" for i in itens) + "</ul>")
+        H.append(f"<ul style='{FONT}font-size:14px;line-height:1.5;color:{C_TXT};margin:6px 0;padding-left:20px'>"
+                 + "".join(f"<li style='margin:3px 0'>{_e(i)}</li>" for i in itens) + "</ul>")
+
+    def aviso(txt: str, bg: str, tx: str, ln: str) -> None:
+        T.append(txt)
+        H.append(f"<div style='{FONT}font-size:14px;background:{bg};color:{tx};border:1px solid {ln};"
+                 f"border-radius:6px;padding:10px 14px;margin:10px 0'><b>{_e(txt)}</b></div>")
+
+    def badge(txt: str, bg: str, tx: str) -> str:
+        return (f"<span style='display:inline-block;font-size:11px;font-weight:bold;letter-spacing:.03em;"
+                f"background:{bg};color:{tx};border-radius:4px;padding:2px 7px;margin:0 4px 2px 0'>{_e(txt)}</span>")
+
+    def badge_etiqueta(nome: str) -> str:
+        if nome == "CONFERIR CONTAGEM":
+            return badge(nome, C_WARN_BG, C_WARN_TX)
+        if nome == "DÚVIDA DE CLASSIFICAÇÃO":
+            return badge(nome, "#ede9fe", "#4c1d95")
+        return badge(nome, C_BG, C_TXT)
+
+    def num_proc(p: dict[str, Any]) -> str:
+        return p.get("numero_processo") or p.get("numero_processo_original") or "não informado pela fonte"
+
+    # ---- cabeçalho ----
+    H.append(f"<div style='{FONT}padding:22px 24px;background:{C_PRIM};color:#ffffff;border-radius:8px 8px 0 0'>"
+             f"<div style='font-size:12px;letter-spacing:.08em;text-transform:uppercase;opacity:.85'>Muriel Advogados · rotina de prazos</div>"
+             f"<div style='font-size:22px;font-weight:bold;margin-top:4px'>Publicações e prazos</div>"
+             f"<div style='font-size:15px;margin-top:2px;opacity:.95'>{_e(br(ex['data_referencia']))}</div></div>")
+    H.append(f"<div style='padding:20px 24px 24px;background:{C_CARD}'>")
 
     if flags.get("somente_email"):
-        par("MODO DE VALIDAÇÃO — nenhum cartão criado")
-        H[-1] = "<p style='background:#fff3cd;padding:6px'><b>MODO DE VALIDAÇÃO — nenhum cartão criado</b></p>"
+        aviso("MODO DE VALIDAÇÃO — nenhum cartão criado", C_WARN_BG, C_WARN_TX, C_WARN_LN)
     if flags.get("dry_run"):
-        par("DRY-RUN — nenhum cartão criado; e-mail não enviado (apenas gerado)")
+        aviso("DRY-RUN — nenhum cartão criado; e-mail não enviado (apenas gerado)", C_WARN_BG, C_WARN_TX, C_WARN_LN)
 
-    # 1. resumo
-    par(f"{n_pub} publicações · {n_prazos} prazos lançados · {n_alertas} alertas")
+    # 1. resumo (texto simples + três indicadores)
+    resumo = f"{n_pub} publicações · {n_prazos} prazos lançados · {n_alertas} alertas"
+    T.append(resumo)
+    H.append(f"<!-- {_e(resumo)} -->")
+
+    def tile(n: int, rotulo: str, cor: str) -> str:
+        return (f"<td width='33%' style='padding:0 4px'><div style='{FONT}background:{C_BG};border-radius:8px;padding:12px 8px;text-align:center'>"
+                f"<div style='font-size:26px;font-weight:bold;color:{cor}'>{n}</div>"
+                f"<div style='font-size:12px;color:{C_MUTED};text-transform:uppercase;letter-spacing:.04em'>{_e(rotulo)}</div></div></td>")
+    H.append("<table role='presentation' width='100%' cellspacing='0' cellpadding='0' style='margin:6px 0 4px'><tr>"
+             + tile(n_pub, "publicações", C_TXT) + tile(n_prazos, "prazos lançados", C_PRIM)
+             + tile(n_alertas, "alertas", C_ERR_TX if n_alertas else C_OK_TX) + "</tr></table>")
     if erro_coleta:
-        par(f"A coleta no DJEN falhou duas vezes: {erro_coleta}. Nenhuma publicação foi processada; "
-            f"repetir manualmente com `python src/rodar.py --data {ex['data_referencia']}`.")
+        aviso(f"A coleta no DJEN falhou duas vezes: {erro_coleta}. Nenhuma publicação foi processada; "
+              f"repetir manualmente com `python src/rodar.py --data {ex['data_referencia']}`.", C_ERR_BG, C_ERR_TX, C_ERR_LN)
 
     # 2. alertas
     if nao_lancados:
         sec("Alertas — NÃO LANÇADOS NO TRELLO (lançar manualmente)")
-        itens = []
         for p in nao_lancados:
-            itens.append(f"{p['titulo']} · fatal {br(p['data_final'])} · lembrete {br(p['data_lembrete'])} · "
-                         f"processo {p['numero_processo'] or 'não informado pela fonte'} · {p['dias']} dias"
-                         f"{' corridos' if p['dias_corridos'] else ' úteis'} · intimado: {', '.join(p['intimados'])} · "
-                         f"etiquetas: {', '.join(p['etiquetas'])} · motivo: {p['detalhe_status']}")
-        lista(itens)
+            aviso(f"{p['titulo']} · fatal {br(p['data_final'])} · lembrete {br(p['data_lembrete'])} · "
+                  f"processo {p['numero_processo'] or 'não informado pela fonte'} · {p['dias']} dias"
+                  f"{' corridos' if p['dias_corridos'] else ' úteis'} · intimado: {', '.join(p['intimados'])} · "
+                  f"etiquetas: {', '.join(p['etiquetas'])} · motivo: {p['detalhe_status']}", C_ERR_BG, C_ERR_TX, C_ERR_LN)
     if alertas:
         sec("Alertas")
         lista(alertas)
 
-    # 3. prazos lançados
-    sec("Prazos lançados no Trello" + (" (simulação)" if dry else ""))
+    # 3. publicações do dia (um cartão por publicação, com os advogados intimados)
+    sec("Publicações do dia", f"({n_pub})" if n_pub else "")
+    if pubs_relatadas:
+        for p in pubs_relatadas:
+            derivados = [x for x in prazos if x["hash_publicacao"] == p["hash"]]
+            intim = ", ".join(p.get("intimados") or ["(intimado não identificado)"])
+            cat = p.get("categoria", "SEM CATEGORIA")
+            dstr = "; ".join(f"{x['ato']} {x['dias']}d → {br(x['data_final'], False)} [{x['status']}]" for x in derivados) or "nenhum"
+            T.append(f" - {num_proc(p)} · {p['tribunal']} / {p['orgao']} · disp. {br(p['data_disponibilizacao'])} · {cat} · "
+                     f"intimados: {intim} · {p.get('resumo') or '(sem resumo)'} · prazos: {dstr}"
+                     + (" · REPUBLICAÇÃO" if p.get("republicacao") else "")
+                     + (f" · dúvida: {p['duvida']}" if p.get("duvida") else ""))
+            cat_badge = badge(cat, C_PRIM_BG, C_PRIM) if cat not in ("INDETERMINADA", "SEM CATEGORIA") else badge(cat, C_ERR_BG, C_ERR_TX)
+            card = [f"<div style='{FONT}border:1px solid {C_LINE};border-radius:8px;padding:14px 16px;margin:10px 0'>",
+                    f"<div style='font-size:15px;font-weight:bold;color:{C_TXT}'>{_e(num_proc(p))}"
+                    + (f" &nbsp;{badge('REPUBLICAÇÃO', C_WARN_BG, C_WARN_TX)}" if p.get("republicacao") else "") + "</div>",
+                    f"<div style='font-size:13px;color:{C_MUTED};margin:2px 0 8px'>{_e(p['tribunal'])} · {_e(p['orgao'])}<br>"
+                    f"Disponibilização: {_e(br(p['data_disponibilizacao']))} · Intimados: {_e(intim)}</div>",
+                    f"<div style='margin-bottom:8px'>{cat_badge}</div>"]
+            if derivados:
+                card.append(f"<table role='presentation' cellspacing='0' cellpadding='0' style='font-size:13px;color:{C_TXT};margin:4px 0'>")
+                for x in derivados:
+                    card.append(f"<tr><td style='padding:2px 10px 2px 0;color:{C_MUTED}'>{_e(x['ato'])}</td>"
+                                f"<td style='padding:2px 10px 2px 0'>{x['dias']} dias{' corridos' if x.get('dias_corridos') else ' úteis'}</td>"
+                                f"<td style='padding:2px 0;font-weight:bold'>{_e(br(x['data_final']))}</td></tr>")
+                card.append("</table>")
+            elif p.get("resumo"):
+                card.append(f"<div style='font-size:13px;color:{C_TXT};line-height:1.5'>{_e(p['resumo'])}</div>")
+            if p.get("duvida") and p.get("duvida") != p.get("resumo"):
+                card.append(f"<div style='font-size:13px;line-height:1.5;background:{C_WARN_BG};color:{C_WARN_TX};"
+                            f"border-left:3px solid {C_WARN_LN};padding:8px 10px;margin-top:10px'><b>Dúvida:</b> {_e(p['duvida'])}</div>")
+            # texto integral da publicação (regra: o conteúdo consta do e-mail; cópia literal, sem resumir nem cortar)
+            texto_pub = p.get("texto_integral") or "não informado pela fonte"
+            card.append(f"<div style='font-size:11px;letter-spacing:.04em;text-transform:uppercase;color:{C_MUTED};margin:12px 0 4px'>Texto da publicação</div>"
+                        f"<div style='font-size:12.5px;line-height:1.55;color:{C_TXT};background:{C_BG};border-radius:6px;"
+                        f"padding:10px 12px;white-space:pre-wrap;word-break:break-word'>{_e(texto_pub)}</div>")
+            T.append(f"   Texto da publicação: {texto_pub}")
+            card.append("</div>")
+            H.append("".join(card))
+        par("Os recortes também seguem no anexo recortes-AAAA-MM-DD.txt.", C_MUTED)
+    else:
+        par("Nenhuma publicação na janela.")
+
+    # 4. prazos lançados
+    sec("Prazos lançados no Trello", "(simulação)" if dry else "")
     ordenados = sorted(lancados + dry, key=lambda p: p["data_final"])
     if ordenados:
         cab = ["Prazo fatal", "Lembrete", "Processo", "Cliente", "Ato", "Advogado intimado", "Cartão", "Etiquetas", "Legalcloud"]
-        linhas = []
-        for p in ordenados:
-            url = (p.get("cartao_fatal") or {}).get("url") or ("(não criado — simulação)" if p["status"] == "DRY_RUN" else "")
-            linhas.append([br(p["data_final"]), br(p["data_lembrete"]), p["numero_processo"] or "não informado pela fonte",
-                           p["cliente"], p["ato"], ", ".join(p["intimados"]), url, ", ".join(p["etiquetas"]), _legalcloud_col(p)])
         T.append(" | ".join(cab))
-        for l in linhas:
-            T.append(" | ".join(l))
-        H.append("<table border='1' cellpadding='4' style='border-collapse:collapse;font-size:13px'><tr>"
-                 + "".join(f"<th>{_e(c)}</th>" for c in cab) + "</tr>"
-                 + "".join("<tr>" + "".join(
-                     (f"<td><a href='{_e(c)}'>{_e(c)}</a></td>" if str(c).startswith("http") else f"<td>{_e(c)}</td>")
-                     for c in l) + "</tr>" for l in linhas) + "</table>")
+        th = (f"style='{FONT}font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:{C_MUTED};"
+              f"text-align:left;padding:8px 8px;border-bottom:2px solid {C_LINE}'")
+        rows = []
+        for i, p in enumerate(ordenados):
+            url = (p.get("cartao_fatal") or {}).get("url") or ""
+            cartao_txt = url or ("(não criado — simulação)" if p["status"] == "DRY_RUN" else "")
+            lc_txt = _legalcloud_col(p)
+            T.append(" | ".join([br(p["data_final"]), br(p["data_lembrete"]), p["numero_processo"] or "não informado pela fonte",
+                                 p["cliente"], p["ato"], ", ".join(p["intimados"]), cartao_txt, ", ".join(p["etiquetas"]), lc_txt]))
+            bg = C_CARD if i % 2 == 0 else "#f9fafb"
+            td = (f"style='{FONT}font-size:13px;color:{C_TXT};padding:8px 8px;border-bottom:1px solid {C_LINE};"
+                  f"vertical-align:top;background:{bg}'")
+            lc_cor = C_ERR_TX if lc_txt.startswith("DIVERGE") else (C_OK_TX if lc_txt.startswith("confere") else C_MUTED)
+            cartao_html = (f"<a href='{_e(url)}' style='color:{C_PRIM}'>abrir cartão</a>" if url
+                           else f"<span style='color:{C_MUTED}'>{_e(cartao_txt)}</span>")
+            dia_semana = DIAS[date.fromisoformat(p["data_final"][:10]).weekday()]
+            rows.append("<tr>"
+                        f"<td {td}><b>{_e(br(p['data_final'], False))}</b><br><span style='color:{C_MUTED};font-size:11px'>{_e(dia_semana)}</span></td>"
+                        f"<td {td}>{_e(br(p['data_lembrete'], False))}</td>"
+                        f"<td {td}><b>{_e(p['cliente'])}</b><br><span style='color:{C_MUTED};font-size:12px'>{_e(p['numero_processo'] or 'não informado pela fonte')}</span></td>"
+                        f"<td {td}>{_e(p['ato'])}<br><span style='color:{C_MUTED};font-size:12px'>intimado: {_e(', '.join(p['intimados']))}</span></td>"
+                        f"<td {td}>{''.join(badge_etiqueta(e) for e in p['etiquetas'])}</td>"
+                        f"<td {td}>{cartao_html}<br><span style='color:{lc_cor};font-size:12px'>Legalcloud: {_e(lc_txt)}</span></td>"
+                        "</tr>")
+        H.append("<table role='presentation' width='100%' cellspacing='0' cellpadding='0' style='border-collapse:collapse;margin:4px 0'>"
+                 f"<tr><th {th}>Prazo fatal</th><th {th}>Lembrete</th><th {th}>Cliente / processo</th><th {th}>Ato</th>"
+                 f"<th {th}>Etiquetas</th><th {th}>Cartão</th></tr>"
+                 + "".join(rows) + "</table>")
         duplicados = [p for p in prazos if p["status"] == "DUPLICADO"]
         if duplicados:
             par("Prazos já existentes no quadro (não recriados):")
@@ -133,38 +237,14 @@ def montar_email(ex: dict[str, Any]) -> tuple[str, str, str]:
     else:
         par("Nenhum prazo lançado.")
 
-    # 4. publicações por advogado
-    sec("Publicações do dia, por advogado")
-    if pubs_relatadas:
-        por_adv: dict[str, list[dict[str, Any]]] = {}
-        for p in pubs_relatadas:
-            for a in (p.get("intimados") or ["(intimado não identificado)"]):
-                por_adv.setdefault(a, []).append(p)
-        for adv in sorted(por_adv):
-            T.append(f"\n[{adv}]")
-            H.append(f"<h4>{_e(adv)}</h4>")
-            itens = []
-            for p in por_adv[adv]:
-                derivados = [x for x in prazos if x["hash_publicacao"] == p["hash"]]
-                dstr = "; ".join(f"{x['ato']} {x['dias']}d → {br(x['data_final'], False)} [{x['status']}]" for x in derivados) or "nenhum"
-                itens.append(f"{p['numero_processo'] or p['numero_processo_original']} · {p['tribunal']} / {p['orgao']} · "
-                             f"disp. {br(p['data_disponibilizacao'])} · {p.get('categoria', 'SEM CATEGORIA')} · "
-                             f"{p.get('resumo') or '(sem resumo)'} · prazos: {dstr}"
-                             + (" · REPUBLICAÇÃO" if p.get("republicacao") else "")
-                             + (f" · dúvida: {p['duvida']}" if p.get("duvida") else ""))
-            lista(itens)
-        par("Texto integral de cada publicação: no anexo recortes-AAAA-MM-DD.txt.")
-    else:
-        par("Nenhuma publicação na janela.")
-
     # 5. pautas e audiências
     sec("Pautas e audiências")
     pa = [p for p in pubs_relatadas if p.get("categoria") in ("PAUTA_JULGAMENTO", "AUDIENCIA")]
     if pa:
-        lista([f"{p['numero_processo'] or p['numero_processo_original']} · {p['tribunal']} · {p['categoria']} · "
+        lista([f"{num_proc(p)} · {p['tribunal']} · {p['categoria']} · "
                f"{p.get('resumo') or ''}" + (f" · {p['duvida']}" if p.get('duvida') else "") for p in pa])
     else:
-        par("Nenhuma.")
+        par("Nenhuma.", C_MUTED)
 
     # 6. sem providência
     sec("Sem providência")
@@ -172,13 +252,13 @@ def montar_email(ex: dict[str, Any]) -> tuple[str, str, str]:
           or (p.get("republicacao") and not any(x["hash_publicacao"] == p["hash"] for x in prazos))
           or p.get("contraparte")]
     if sp:
-        lista([f"{p['numero_processo'] or p['numero_processo_original']} · {p['tribunal']} · "
+        lista([f"{num_proc(p)} · {p['tribunal']} · "
                f"{'republicação sem alteração' if p.get('republicacao') else p.get('categoria')} · {p.get('resumo') or ''}" for p in sp])
     else:
-        par("Nenhuma.")
+        par("Nenhuma.", C_MUTED)
 
     # 7. rodapé
-    sec("Rodapé")
+    T.append("\n== Rodapé ==")
     cal = ex.get("calendario", {})
     fontes = ex.get("fontes_status", {})
     rod = [
@@ -192,11 +272,17 @@ def montar_email(ex: dict[str, Any]) -> tuple[str, str, str]:
         + (f" · site indisponível: {ex['legalcloud']['indisponivel']}" if ex.get("legalcloud", {}).get("indisponivel") else ""),
         f"Publicações já tratadas em execução anterior (não repetidas): {sum(1 for p in pubs if p.get('ja_processada'))}",
     ]
-    lista(rod)
+    for i in rod:
+        T.append(f" - {i}")
+    H.append(f"<div style='{FONT}font-size:11px;line-height:1.6;color:{C_MUTED};border-top:1px solid {C_LINE};"
+             f"margin-top:28px;padding-top:12px'>" + "<br>".join(_e(i) for i in rod) + "</div>")
+    H.append("</div>")  # fecha o corpo do cartão
 
     texto = "\n".join(T)
-    html = ("<html><body style='font-family:Arial,sans-serif;font-size:14px'>"
-            + "".join(H) + "</body></html>")
+    html = (f"<html><body style='margin:0;padding:16px;background:{C_BG}'>"
+            f"<table role='presentation' width='100%' cellspacing='0' cellpadding='0'><tr><td align='center'>"
+            f"<div style='max-width:760px;margin:0 auto;text-align:left;border-radius:8px;box-shadow:0 1px 3px rgba(0,0,0,.08)'>"
+            + "".join(H) + "</div></td></tr></table></body></html>")
     return assunto, html, texto
 
 

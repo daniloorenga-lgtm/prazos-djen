@@ -6,3 +6,4 @@ google-auth-oauthlib>=1.2
 google-api-python-client>=2.130
 pytest>=8.0
 playwright>=1.45
+tzdata>=2024.1

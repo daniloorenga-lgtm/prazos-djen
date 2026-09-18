@@ -66,10 +66,10 @@ def test_ciclo_dry_run(ambiente):
     assert all("DÚVIDA DE CLASSIFICAÇÃO" in p["etiquetas"] and "CONFERIR CONTAGEM" in p["etiquetas"] for p in indet)
     assert any("D0 ANTIGA" in a for a in ex["alertas"])
     # Legalcloud simulado: só os prazos CONFERIR passam pelo site; INDETERMINADA (4) sempre confere
-    assert ex["conferidos_legalcloud"] == 4 and ex["legalcloud"]["usado"] is True
+    assert ex["conferidos_legalcloud"] == 6 and ex["legalcloud"]["usado"] is True   # conferir_todos: todos os 6 prazos
     assert all(p["legalcloud"]["confere"] is True for p in indet)
     assert "Legalcloud:" in indet[0]["cartao_fatal"]["descricao"] and "confere" in indet[0]["cartao_fatal"]["descricao"]
-    assert ed["legalcloud"] is None and "pendente de conferência" not in desc
+    assert ed["legalcloud"]["confere"] is True and "CONFERIR CONTAGEM" not in ed["etiquetas"] and "pendente de conferência" not in desc   # conferido no site, sem etiqueta
     assert sum("INDETERMINADA" in a for a in ex["alertas"]) >= 2
 
     rc = rodar.main(["--etapa", "autoverificar"])

@@ -23,7 +23,7 @@ python -m pytest -q           # tudo deve passar antes de qualquer execução re
    não há "Marcelo Antonio Muriel" no quadro; ou ele é convidado, ou o quarto membro em `config.yaml` deve ser Marcela.
 3. **Legalcloud (conferência de prazos, §0 uso_2):** a rotina abre a calculadora **"Prazos DJEN/DJE"**
    (https://app.legalcloud.com.br/calculadora/prazo-djen-dje/) em Chromium headless, faz login com `LEGALCLOUD_USER`/`LEGALCLOUD_PASS`
-   e confere **todo prazo marcado `CONFERIR CONTAGEM`**, informando meio (DJEN/DJE), **data de disponibilização**, dias, regime
+   e confere **todos os prazos do dia** (`legalcloud.conferir_todos: true`; a etiqueta `CONFERIR CONTAGEM` fica só para os casos que pedem olhar humano ou que o site não confirmou), informando meio (DJEN/DJE), **data de disponibilização**, dias, regime
    (Novo CPC; Juizado Especial ou CPP quando dias corridos), tribunal, processo eletrônico, sistema (eSAJ para o TJSP), instância
    e "não incluir suspensões municipais". A simulação dia a dia do site é lida e o dia numerado igual ao prazo é a data do site.
    Resultado na descrição do cartão ("Legalcloud: DD/MM — confere / DIVERGE …"); em divergência **prevalece a data mais curta**.

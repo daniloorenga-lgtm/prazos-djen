@@ -381,7 +381,10 @@ def etapa_contar_e_lancar(args: argparse.Namespace, config: dict[str, Any]) -> i
             data_final = res.data_final
             linha_lc = None
             conferencia: dict[str, Any] | None = None
-            if conferir:
+            # Regra do escritório: o Legalcloud confere TODOS os prazos, todo dia (legalcloud.conferir_todos, padrão true).
+            # A etiqueta CONFERIR CONTAGEM continua reservada aos casos que merecem olhar humano.
+            conferir_no_site = conferir or bool(lccfg.get("conferir_todos", True))
+            if conferir_no_site:
                 conferidor = obter_conferidor()
                 if conferidor is not None:
                     # regra do DJEN: tudo se conta da DISPONIBILIZAÇÃO (D0); só informe a publicação se o config mandar
@@ -400,11 +403,14 @@ def etapa_contar_e_lancar(args: argparse.Namespace, config: dict[str, Any]) -> i
                         ex["conferidos_legalcloud"] += 1
                     else:
                         ex["alertas"].append(f"Legalcloud não conferiu {pub.get('numero_processo')} · {prazo.ato}: {rc.observacao}")
+                        conferir = True   # sem confirmação do site, o prazo vai para conferência humana
                     if divergiu:
                         ex["legalcloud"]["divergencias"] += 1
                         lemb = calc_lembrete(data_final, prazo.dias, feriados, suspensoes, dia_1=res.dia_1)
                         obs.append(linha_lc)
                         ex["alertas"].append(f"DIVERGÊNCIA Legalcloud: {pub.get('numero_processo')} · {prazo.ato} — site {br(rc.data_site)} × local {br(res.data_final)}; lançado o mais curto ({br(data_final)}).")
+                else:
+                    conferir = True       # site indisponível: conferência humana
             etiquetas = []
             if conferir:
                 etiquetas.append("CONFERIR CONTAGEM")
@@ -695,7 +701,17 @@ def etapa_descobrir_ids(args: argparse.Namespace, config: dict[str, Any]) -> int
 
 
 # ---------------------------------------------------------------- main
+def _terminal_utf8() -> None:
+    """No Windows o console usa cp1252 e não imprime setas/acentos; força UTF-8 na saída."""
+    for f in (sys.stdout, sys.stderr):
+        try:
+            f.reconfigure(encoding="utf-8", errors="replace")
+        except Exception:
+            pass
+
+
 def main(argv: list[str] | None = None) -> int:
+    _terminal_utf8()
     ap = argparse.ArgumentParser(description="prazos-djen — rotina de publicações e prazos")
     ap.add_argument("--etapa", choices=["coletar", "contar-e-lancar", "autoverificar", "email", "fechar", "descobrir-ids"])
     ap.add_argument("--dry-run", action="store_true", help="não cria cartões nem envia e-mail")

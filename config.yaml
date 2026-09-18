@@ -1,76 +1,122 @@
-# Parâmetros da rotina (§0 da especificação). Sem credenciais aqui — elas ficam no .env.
-
 advogados_monitorados:
-  - {nome: Marcelo Antonio Muriel,               apelido: Marcelo,   oab: "83931",  uf: SP}
-  - {nome: Danilo Orenga Conceição,              apelido: Danilo,    oab: "315244", uf: SP}
-  - {nome: Giovanny Ferreira Russo,              apelido: Giovanny,  oab: "344017", uf: SP}
-  - {nome: Fernanda Cominato Nemr,               apelido: Fernanda,  oab: "440063", uf: SP}
-  - {nome: Carolina Naves Silvestre,             apelido: Carolina,  oab: "441118", uf: SP}
-  - {nome: Pedro Augusto Di Giovanni Boro,       apelido: Pedro,     oab: "500124", uf: SP}
-  - {nome: Alexia Fellipelli Stussi Neves,       apelido: Alexia,    oab: "523909", uf: SP}
-  - {nome: Alexandre Mulinari Pinheiro Machado,  apelido: Alexandre, oab: "136373", uf: PR}   # UF diferente
-
+- nome: Marcelo Antonio Muriel
+  apelido: Marcelo
+  oab: '83931'
+  uf: SP
+- nome: Danilo Orenga Conceição
+  apelido: Danilo
+  oab: '315244'
+  uf: SP
+- nome: Giovanny Ferreira Russo
+  apelido: Giovanny
+  oab: '344017'
+  uf: SP
+- nome: Fernanda Cominato Nemr
+  apelido: Fernanda
+  oab: '440063'
+  uf: SP
+- nome: Carolina Naves Silvestre
+  apelido: Carolina
+  oab: '441118'
+  uf: SP
+- nome: Pedro Augusto Di Giovanni Boro
+  apelido: Pedro
+  oab: '500124'
+  uf: SP
+- nome: Alexia Fellipelli Stussi Neves
+  apelido: Alexia
+  oab: '523909'
+  uf: SP
+- nome: Alexandre Mulinari Pinheiro Machado
+  apelido: Alexandre
+  oab: '136373'
+  uf: PR
 fontes:
   djen:
     base_url: https://comunicaapi.pje.jus.br/api/v1
-    itens_por_pagina: 100          # a API só aceita 5 ou 100
+    itens_por_pagina: 100
     max_tentativas: 5
     timeout_segundos: 60
   secundarias: []
 janela:
   dias_uteis_primeira_execucao: 3
-
 trello:
   board_url: https://trello.com/b/ViIfsfD1
   board_id: 683a306e577239c1d30e30ad
   lista_destino: Prazos
   lista_destino_id: 683a306f577239c1d30e30fb
-  listas_nao_tocar: [Providências, Em elaboração, Em revisão, Acompanhar, Protocolar/Enviar ao cliente]
-  # Membros de TODO cartão (§0). IDs preenchidos por `rodar.py --etapa descobrir-ids`
-  # (ou lidos do quadro em 17/09/2026). ATENÇÃO: o quadro NÃO tem membro "Marcelo";
-  # os cartões existentes usam "Marcela Felix Lira". Confirmar antes do primeiro lançamento real.
+  listas_nao_tocar:
+  - Providências
+  - Em elaboração
+  - Em revisão
+  - Acompanhar
+  - Protocolar/Enviar ao cliente
   membros:
-    - {nome: Danilo,   nome_trello: Danilo Orenga,                    id: 6846c915cfdfa7f21fa9adee}
-    - {nome: Pedro,    nome_trello: Pedro Augusto Di Giovanni Boro,   id: 683a2ffe77e8a6baf04f3895}
-    - {nome: Carolina, nome_trello: Carolina Naves,                   id: 68473cbc67661370338cca5a}
-    - {nome: Marcelo,  nome_trello: Marcelo Antonio Muriel,           id: null}   # não encontrado no quadro — ver README
+  - nome: Danilo
+    nome_trello: Danilo Orenga
+    id: 6846c915cfdfa7f21fa9adee
+  - nome: Pedro
+    nome_trello: Pedro Augusto Di Giovanni Boro
+    id: 683a2ffe77e8a6baf04f3895
+  - nome: Carolina
+    nome_trello: Carolina Naves
+    id: 68473cbc67661370338cca5a
+  - nome: Marcela
+    nome_trello: Marcela Felix Lira
+    id: 683dde2d160769459158921b
   etiquetas:
     Prazo Fatal: 683a306f577239c1d30e30ee
     Lembrete: 683a306f577239c1d30e30ec
-    CONFERIR CONTAGEM: null            # criada por descobrir-ids se faltar
-    DÚVIDA DE CLASSIFICAÇÃO: null      # criada por descobrir-ids se faltar
+    CONFERIR CONTAGEM: 6aac7b4994d0582883ba476d
+    DÚVIDA DE CLASSIFICAÇÃO: 6aac7b493d93e86385f9a396
   fuso: America/Sao_Paulo
-  hora_vencimento: "23:59"
-
+  hora_vencimento: '23:59'
 email:
   remetente: dorenga@muriel.adv.br
-  destinatarios: [dorenga@muriel.adv.br, pboro@muriel.adv.br, cnaves@muriel.adv.br]
+  destinatarios:
+  - dorenga@muriel.adv.br
+  - pboro@muriel.adv.br
+  - cnaves@muriel.adv.br
   enviar_mesmo_sem_publicacao: true
-
 calendario:
   arquivo: dados/feriados-forenses.json
   status: dados/feriados-forenses.status.json
   idade_maxima_dias: 14
-
-# Conferência de prazos no site (§0 uso_2). Credenciais SÓ em LEGALCLOUD_USER / LEGALCLOUD_PASS (.env).
-# Formulário inspecionado em 17/09/2026 (login real). Se o site mudar: `python src/legalcloud.py --explorar`.
 legalcloud:
   url: https://app.legalcloud.com.br/calculadora/
   url_login: https://app.legalcloud.com.br/conta/login/
-  url_calculadora: https://app.legalcloud.com.br/calculadora/prazo-djen-dje/   # calculadora "Prazos DJEN/DJE"
+  url_calculadora: https://app.legalcloud.com.br/calculadora/prazo-djen-dje/
   timeout_segundos: 45
   headless: true
-  conferir_no_dry_run: true       # a conferência só lê o site; pode rodar em --dry-run
-  data_informada: disponibilizacao   # a calculadora DJEN/DJE pede a data de disponibilização (D0)
+  conferir_no_dry_run: true
+  conferir_todos: true   # regra do escritório: todo prazo é conferido no site, todo dia
+  data_informada: disponibilizacao
   tipo_processo_padrao: Eletrônico
-  sistema_padrao: eSAJ            # TJSP exige escolher o sistema; eSAJ para os processos do escritório
-  sistema_por_tribunal: {TJSP: eSAJ}
-  suspensoes_municipais: Não incluir   # "Incluir" alonga o prazo; a regra do escritório é a data mais curta
-  campos: {}                      # login: sobrescreve os candidatos padrão (label=..., css=...)
-  campos_djen: {}                 # formulário DJEN/DJE: sobrescreve os seletores CSS de CAMPOS_DJEN
-
-# Usados pela rotina semanal (prompt 03) para extrair o calendário do Legalcloud.
-tribunais_monitorados: [TJSP, TJPR, TRF3, STJ, STF, TJRJ, TJMG, TRT2, TRT15]
+  sistema_padrao: eSAJ
+  sistema_por_tribunal:
+    TJSP: eSAJ
+  suspensoes_municipais: Não incluir
+  campos: {}
+  campos_djen: {}
+tribunais_monitorados:
+- TJSP
+- TJPR
+- TRF3
+- STJ
+- STF
+- TJRJ
+- TJMG
+- TRT2
+- TRT15
 comarcas:
-  TJSP: [São Paulo, Campinas, Santo Amaro, Guarulhos, Osasco, Barueri, Santos, São Bernardo do Campo]
-  TJPR: [Curitiba]
+  TJSP:
+  - São Paulo
+  - Campinas
+  - Santo Amaro
+  - Guarulhos
+  - Osasco
+  - Barueri
+  - Santos
+  - São Bernardo do Campo
+  TJPR:
+  - Curitiba
