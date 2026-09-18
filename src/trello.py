@@ -139,9 +139,26 @@ class ClienteTrello:
         cartoes = cartoes if cartoes is not None else self.cartoes_do_quadro()
         return [c for c in cartoes if numero_cnj in (c.get("desc") or "") or numero_cnj in (c.get("name") or "")]
 
-    def existente_para_ato(self, numero_cnj: str, titulo: str, cartoes: list[dict[str, Any]] | None = None) -> dict[str, Any] | None:
+    def existente_para_ato(self, numero_cnj: str, titulo: str, cartoes: list[dict[str, Any]] | None = None,
+                           id_lembrete: str | None = None) -> dict[str, Any] | None:
+        """Cartão já existente para o mesmo processo + ato. Prefere o cartão de Prazo Fatal: um cartão com a
+        etiqueta Lembrete só é devolvido se não houver outro (um par Fatal+Lembrete tem o mesmo título)."""
+        candidatos = [c for c in self.buscar_por_processo(numero_cnj, cartoes) if mesmo_ato(c.get("name") or "", titulo)]
+        if not candidatos:
+            return None
+        if id_lembrete:
+            sem_lembrete = [c for c in candidatos if id_lembrete not in (c.get("idLabels") or [])]
+            if sem_lembrete:
+                return sem_lembrete[0]
+        return candidatos[0]
+
+    def lembrete_para_ato(self, numero_cnj: str, titulo: str, cartoes: list[dict[str, Any]] | None = None,
+                          id_lembrete: str | None = None) -> dict[str, Any] | None:
+        """O cartão de Lembrete do mesmo processo + ato (etiqueta Lembrete), se existir."""
+        if not id_lembrete:
+            return None
         for c in self.buscar_por_processo(numero_cnj, cartoes):
-            if mesmo_ato(c.get("name") or "", titulo):
+            if mesmo_ato(c.get("name") or "", titulo) and id_lembrete in (c.get("idLabels") or []):
                 return c
         return None
 

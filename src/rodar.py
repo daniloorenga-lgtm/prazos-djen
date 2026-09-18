@@ -440,7 +440,8 @@ def etapa_contar_e_lancar(args: argparse.Namespace, config: dict[str, Any]) -> i
             existente = None
             if pub.get("numero_processo"):
                 if cliente_trello:
-                    existente = cliente_trello.existente_para_ato(pub["numero_processo"], titulo, cartoes_quadro)
+                    existente = cliente_trello.existente_para_ato(pub["numero_processo"], titulo, cartoes_quadro,
+                                                                  id_lembrete=(tcfg.get("etiquetas") or {}).get("Lembrete"))
                 chave_local = f"{pub['numero_processo']}|{titulo.rsplit('|', 1)[-1].strip().lower()}"
                 if chave_local in criados_nesta_execucao:
                     existente = existente or {"name": titulo, "shortUrl": "(criado nesta execução)", "id": None, "due": None}
@@ -458,6 +459,13 @@ def etapa_contar_e_lancar(args: argparse.Namespace, config: dict[str, Any]) -> i
                             cliente_trello.comentar(existente["id"], f"Republicação/nova intimação em {br(d0)} — prazo ATUALIZADO para {br(data_final)}. Contagem: {res.linha_contagem()}")
                             item["status"] = "ATUALIZADO"
                             item["cartao_fatal"] = {"url": existente.get("shortUrl"), "id": existente["id"]}
+                            # o Lembrete do mesmo ato acompanha a nova data (§5.4: os dois cartões formam um par)
+                            lembrete_ex = cliente_trello.lembrete_para_ato(pub["numero_processo"], titulo, cartoes_quadro,
+                                                                           id_lembrete=(tcfg.get("etiquetas") or {}).get("Lembrete"))
+                            if lembrete_ex and lembrete_ex.get("id") and lembrete_ex["id"] != existente["id"]:
+                                cliente_trello.atualizar_vencimento(lembrete_ex["id"], lemb.isoformat(), tcfg["fuso"], tcfg["hora_vencimento"])
+                                cliente_trello.comentar(lembrete_ex["id"], f"Republicação/nova intimação em {br(d0)} — lembrete ATUALIZADO para {br(lemb)} (prazo fatal {br(data_final)}).")
+                                item["cartao_lembrete"] = {"url": lembrete_ex.get("shortUrl"), "id": lembrete_ex["id"]}
                         else:
                             cliente_trello.comentar(existente["id"], f"Republicação/nova intimação em {br(d0)} — prazo mantido ({br(data_final)}).")
                     except Exception as e:  # noqa: BLE001

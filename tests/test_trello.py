@@ -111,3 +111,18 @@ def test_metodo_proibido(cli):
     c, _ = cli
     with pytest.raises(ErroTrello):
         c._req("DELETE", "/cards/1")
+
+
+def test_existente_prefere_fatal_e_acha_lembrete(cli):
+    """Regressão 18/09/2026: o Lembrete (mesmo título) era tomado como 'existente' e tinha o vencimento sobrescrito."""
+    c, s = cli
+    cnj = "4123639-79.2026.8.26.0000"
+    s.cartoes = [{"id": "L", "name": "S X N | Contrarrazões de Agravo", "desc": f"... {cnj} ...", "closed": False, "idLabels": ["LEMB"]},
+                 {"id": "F", "name": "S X N | Contrarrazões de Agravo", "desc": f"... {cnj} ...", "closed": False, "idLabels": ["FATAL"]}]
+    assert c.existente_para_ato(cnj, "S X N | contrarrazoes de agravo", id_lembrete="LEMB")["id"] == "F"
+    assert c.lembrete_para_ato(cnj, "S X N | contrarrazoes de agravo", id_lembrete="LEMB")["id"] == "L"
+    # sem o id da etiqueta (config antigo) mantém o comportamento anterior: primeiro que aparecer
+    assert c.existente_para_ato(cnj, "S X N | contrarrazoes de agravo")["id"] == "L"
+    # só existe o lembrete: ele é devolvido para não criar par duplicado
+    s.cartoes = s.cartoes[:1]
+    assert c.existente_para_ato(cnj, "S X N | contrarrazoes de agravo", id_lembrete="LEMB")["id"] == "L"
