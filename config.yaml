@@ -72,7 +72,7 @@ trello:
   fuso: America/Sao_Paulo
   hora_vencimento: '23:59'
 email:
-  remetente: dorenga@muriel.adv.br
+  remetente: daniloorenga@gmail.com
   destinatarios:
   - dorenga@muriel.adv.br
   - pboro@muriel.adv.br
